@@ -5,7 +5,7 @@
         <div class="container">
             <div class="row">
                 <div class="col-lg-8">
-                    <h3 class="text-primary">{{ env('APP_NAME') }}</h3>
+                    <h3 class="text-primary">{{ $organisation['name'] }}</h3>
                     <div class="ck-text text-muted">
                         Selecteer een evenement om tickets te beheren
                     </div>
@@ -59,7 +59,7 @@
                                 </div>
                             </div>
                             <div class="btn-wrapper">
-                                <a href="{{ route('event.overview', $event['uuid']) }}" class="btn btn-primary">
+                                <a href="{{ route('event.overview', [$organisation['slug'], $event['slug']]) }}" class="btn btn-primary">
                                     Bekijk tickets
                                 </a>
                             </div>

@@ -6,7 +6,7 @@
             <div class="row">
                 <div class="col-lg-8">
                     <div class="mb-5">
-                        <a href="{{ route('event.overview', $event['uuid']) }}" class="text-white text-decoration-none">
+                        <a href="{{ route('event.overview', [$organisation['slug'], $event['slug']]) }}" class="text-white text-decoration-none">
                             <i class="fa-solid fa-arrow-left-long me-2 text-white"></i> Terug</a>
                     </div>
                     <h5 class="text-white">Scanner instellen</h5>
@@ -18,7 +18,7 @@
         </div>
     </header>
 
-    <form method="post" action="{{ route('scan.camera', $event['uuid']) }}" class="w-100">
+    <form method="post" action="{{ route('scan.camera', [$organisation['slug'], $event['slug']]) }}" class="w-100">
         @csrf
         <section class="section">
             <div class="container">
