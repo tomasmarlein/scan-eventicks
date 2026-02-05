@@ -32,6 +32,7 @@ php artisan config:clear
 php artisan cache:clear
 php artisan route:clear
 php artisan view:clear
+php artisan icons:cache
 
 # Migrate (uncomment if you want it)
 php artisan migrate --force

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Event;
+use App\Models\Orderline;
+use App\Models\Organisation;
 use App\Models\User;
 use App\Services\ApiService;
 use Illuminate\Http\Request;
@@ -15,16 +18,27 @@ class ScanController extends Controller
         $this->apiService = $apiService;
     }
 
-    public function index($uuid)
+    public function index($org_slug, $slug)
     {
-        $event = $this->apiService->getEventByUuid($uuid);
+        $organisation = Organisation::where('slug', $org_slug)->first();
+
+        if (!$organisation) {
+            abort(404);
+        }
+
+        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
+
+        if (!$event) {
+            abort(404);
+        }
 
         return view('web.tickets', [
-            'event' => $event,
+            'organisation' => $organisation,
+            'event'        => $event,
         ]);
     }
 
-    public function camera(Request $request, $uuid)
+    public function camera(Request $request, $org_slug, $slug)
     {
         $request->validate([
                                'tickets' => 'required',
@@ -40,57 +54,124 @@ class ScanController extends Controller
             $tickets = json_decode($tickets, true);
         }
 
-        $event = $this->apiService->getEventByUuid($uuid);
+        $organisation = Organisation::where('slug', $org_slug)->first();
+
+        if (!$organisation) {
+            abort(404);
+        }
+
+        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
+
+        if (!$event) {
+            abort(404);
+        }
 
         return view('web.scan', [
-            'event'    => $event,
-            'event_id' => $event['id'],
-            'tickets'  => $tickets,
+            'organisation' => $organisation,
+            'event'        => $event,
+            'event_id'     => $event['id'],
+            'tickets'      => $tickets,
         ]);
     }
 
-    public function store($event_uuid, Request $request)
+    public function store($org_slug, $event_slug, Request $request)
     {
-        $event = $this->apiService->getEventByUuid($event_uuid);
+        $organisation = Organisation::where('slug', $org_slug)->firstOrFail();
+
+        $event = Event::with('tickets.orderlines')->where('slug', $event_slug)->firstOrFail();
 
         $data = $request->validate([
-                                       'qr' => ['required', 'string', 'max:4096'],
-                                   ]);
+           'qr'      => ['required', 'string', 'max:4096'],
+           'tickets' => ['nullable'],
+        ]);
 
         $qr = trim($data['qr']);
 
-        $tickets = json_decode($request->input('tickets', '[]'), true);
+        // Basis scan response (altijd aanwezig)
+        $scan = [
+            'status'   => 'error',   // success|warning|error
+            'message'  => 'Onbekende fout.',
+            'zone'     => 'Algemeen',
+            'order_ref'=> null,
+            'orderline'=> [
+                'name' => null,
+                'unique_qr_id' => $qr,
+                'ticket' => [
+                    'name'  => null,
+                    'price' => null,
+                ],
+            ],
+        ];
 
-        $scan = $this->apiService->scanTicket($event_uuid, $qr, $tickets);
+        $tickets = json_decode($request->input('tickets', '[]'), true) ?: [];
 
-        if (!$scan) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                                            'status' => 'error',
-                                                                                                                                                                                                                                                  'message' => 'Er is iets misgegaan bij het scannen van de ticket. Probeer het opnieuw.',
-                                        ], 422);
-            }
+        // Get orderline
+        $orderline = Orderline::where('uuid', $qr)->first();
 
-            smilify('error', 'Er is iets misgegaan bij het scannen van de ticket. Probeer het opnieuw.');
-
-            return redirect()->route('scan.camera', ['uuid' => $event_uuid]);
+        if (!$orderline) {
+            $scan['status']  = 'error';
+            $scan['message'] = 'Ticket bestaat niet.';
+            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
         }
 
-        // Get user + scan count
-        $user = User::find(auth()->id());
-        $user?->increment('scan_count');
+        $scan['order_ref'] = $orderline->order_reference ?? null;
+        $scan['zone']      = $orderline->zone ?? 'Algemeen';
+        $scan['orderline'] = [
+            'name' => $orderline->name ?? null,
+            'unique_qr_id' => $orderline->unique_qr_id ?? $orderline->uuid ?? $qr,
+            'ticket' => [
+                'name'  => optional($orderline->ticket)->name,
+                'price' => optional($orderline->ticket)->price,
+            ],
+        ];
 
+        /**
+         * 2) Verkeerd event
+         */
+        if ((int) $orderline->event_id !== (int) $event->id) {
+            $scan['status']  = 'error';
+            $scan['message'] = 'Ticket hoort bij een ander evenement.';
+            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
+        }
+
+        /**
+         * 3) Geblokkeerd / al gescand
+         * Ik neem aan: blocked=true betekent "al ingecheckt".
+         * Als jij een ander veld hebt (checked_in_at), zeg het en ik pas aan.
+         */
+        if ((bool) ($orderline->blocked ?? false)) {
+            $scan['status']  = 'warning';
+            $scan['message'] = 'Ticket is al ingecheckt (al gescand).';
+            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
+        }
+
+        /**
+         * 4) Geldig: markeer als gescand + success
+         */
+        $orderline->blocked = true;
+        // $orderline->checked_in_at = now(); // als je dit veld hebt
+        // $orderline->checked_in_by = auth()->id(); // idem
+        $orderline->save();
+
+        $scan['status']  = 'success';
+        $scan['message'] = 'Geldig ticket. Check-in geslaagd.';
+
+        return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
+    }
+
+    private function renderScanResult($event, $organisation, array $scan, array $tickets, Request $request)
+    {
         if ($request->expectsJson()) {
             return response()->json([
-                                        'status'     => $scan['status'],   // bv. 'success' | 'warning' | 'error'
-                                        'message'    => $scan['message'],
-                                        'scan_count' => $user->scan_count,
-                                    ]);
+                'status'     => $scan['status'],
+                'message'    => $scan['message'],
+                'scan'       => $scan,
+            ]);
         }
 
-//        smilify($scan['status'], $scan['message']);
         return view('web.scan-result', [
-            'event_uuid' => $event_uuid,
+            'organisation' => $organisation,
+            'event_uuid' => $event->uuid ?? null,
             'event'      => $event,
             'scan'       => $scan,
             'tickets'    => $tickets,

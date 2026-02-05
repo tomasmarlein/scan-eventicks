@@ -2,105 +2,102 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ApiService;
+use App\Models\Event;
+use App\Models\Orderline;
+use App\Models\Organisation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 
 class ManuelController extends Controller
 {
-    protected $apiService;
-
-    public function __construct(ApiService $apiService)
+    public function index($org_slug, $slug)
     {
-        $this->apiService = $apiService;
-    }
+        $organisation = Organisation::where('slug', $org_slug)->first();
 
-    public function index($uuid)
-    {
-        $event = $this->apiService->getEventByUuid($uuid);
+        abort_if(!$organisation, 404);
+
+        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
+
         abort_if(!$event, 404);
 
-        $orderlines = $this->apiService->getOrderlinesByEvent($event['id']) ?? [];
+        $orderlines = Orderline::where('event_id', $event['id'])->get() ?? [];
 
         // voeg actie-URLs toe
-        $orderlines = collect($orderlines)->map(function ($ol) use ($uuid) {
-            $orderline_uuid = $ol['orderline_uuid'] ?? $ol['uuid']; // welke key je API ook gebruikt
+        $orderlines = $orderlines->map(function (Orderline $ol) use ($org_slug, $slug) {
+            $orderline_uuid = $ol->orderline_uuid ?? $ol->uuid;
 
-            return array_merge($ol, [
-                'url_checkin'  => route('manuel.checkin', ['uuid' => $uuid, 'orderline_uuid' => $orderline_uuid]),
-                'url_checkout' => route('manuel.checkout', ['uuid' => $uuid, 'orderline_uuid' => $orderline_uuid]),
+            return array_merge($ol->toArray(), [
+                'url_checkin'  => route('manuel.checkin', ['org_slug' => $org_slug, 'slug' => $slug, 'orderline_uuid' => $orderline_uuid]),
+                'url_checkout' => route('manuel.checkout', ['org_slug' => $org_slug, 'slug' => $slug, 'orderline_uuid' => $orderline_uuid]),
             ]);
         })->all();
 
         return view('web.manuel', [
+            'organisation' => $organisation,
             'event'      => $event,
             'orderlines' => $orderlines,
         ]);
     }
 
-    public function search($uuid, Request $request)
+    public function search($org_slug, $slug, Request $request)
     {
-        $event = $this->apiService->getEventByUuid($uuid);
+        $organisation = Organisation::where('slug', $org_slug)->first();
+        abort_if(!$organisation, 404);
+
+        $event = Event::where('slug', $slug)->first();
         abort_if(!$event, 404);
 
         $q = trim((string) $request->input('q', ''));
 
-        // Probeer eerst via de API search
-        $results = $this->apiService->searchOrderlinesByEvent($event['id'], $q);
+        // Orderline zit op tickets_mysql
+        $query = Orderline::query()->where('event_id', $event->id);
 
-        // Fallback: lokaal filteren als de API geen search ondersteunt of null teruggeeft
-        if ($results === null) {
-            $all    = $this->apiService->getOrderlinesByEvent($event['id']) ?? [];
-            $needle = Str::lower($q);
+        if ($q !== '') {
+            $conn = (new Orderline)->getConnectionName() ?: config('database.default');
 
-            $results = collect($all)->filter(function ($ol) use ($needle) {
-                if ($needle === '') {
-                    return true;
+            // Alleen kolommen gebruiken die echt bestaan
+            $columns = collect([
+                                   'uuid',
+                                   'orderline_uuid',
+                                   'unique_qr_code',
+                                   'unique_qr_id',
+                                   'name',
+                                   'email',
+                                   'order_reference',
+                               ])->filter(fn ($col) => Schema::connection($conn)->hasColumn('orderlines', $col))
+                                 ->values()
+                                 ->all();
+
+            $query->where(function ($sub) use ($q, $columns) {
+                // exact match velden (als ze bestaan)
+                foreach (['uuid','orderline_uuid','unique_qr_code','unique_qr_id'] as $col) {
+                    if (in_array($col, $columns, true)) {
+                        $sub->orWhere($col, $q);
+                    }
                 }
 
-                // Exact match voor QR / UUID (handig bij plakken van QR-code)
-                $qr = Str::lower((string) (
-                    $ol['unique_qr_code'] ?? // als je die key hebt
-                    $ol['unique_qr_id'] ??
-                    $ol['uuid'] ?? ''
-                ));
-
-                if ($qr !== '' && $qr === $needle) {
-                    return true;
+                // fuzzy velden (als ze bestaan)
+                foreach (['name','email','order_reference'] as $col) {
+                    if (in_array($col, $columns, true)) {
+                        $sub->orWhere($col, 'like', "%{$q}%");
+                    }
                 }
-
-                // Algemene fuzzy search (naam, qr, mail, referentie…)
-                $hay = Str::lower(
-                    ($ol['name'] ?? '') . ' ' .
-                    ($ol['unique_qr_code'] ?? '') . ' ' .
-                    ($ol['unique_qr_id'] ?? '') . ' ' .
-                    ($ol['email'] ?? '') . ' ' .
-                    ($ol['order_reference'] ?? '')
-                );
-
-                return Str::contains($hay, $needle);
-            })->values();
-        } else {
-            $results = collect($results);
+            });
         }
 
-        // Routes + eventuele aliases toevoegen
-        $orderlines = $results->map(function ($ol) use ($uuid) {
-            $id = $ol['orderline_uuid'] ?? $ol['uuid'] ?? null;
+        $orderlines = $query->orderByDesc('id')->get();
 
-            // alias zodat je in Blade consequent kunt zijn
-            $ol['unique_qr_code'] = $ol['unique_qr_code']
-                                    ?? $ol['unique_qr_id']
-                                       ?? $ol['uuid']
-                                          ?? null;
+        $orderlines = $orderlines->map(function (Orderline $ol) use ($org_slug, $slug) {
+            $orderline_uuid = $ol->orderline_uuid ?? $ol->uuid;
 
-            $ol['url_checkin']  = $id ? route('manuel.checkin', ['uuid' => $uuid, 'orderline_uuid' => $id]) : null;
-            $ol['url_checkout'] = $id ? route('manuel.checkout', ['uuid' => $uuid, 'orderline_uuid' => $id]) : null;
-
-            return $ol;
+            return array_merge($ol->toArray(), [
+                'unique_qr_code' => $ol->unique_qr_code ?? $ol->unique_qr_id ?? $ol->uuid,
+                'url_checkin'  => route('manuel.checkin', ['org_slug' => $org_slug, 'slug' => $slug, 'orderline_uuid' => $orderline_uuid]),
+                'url_checkout' => route('manuel.checkout', ['org_slug' => $org_slug, 'slug' => $slug, 'orderline_uuid' => $orderline_uuid]),
+            ]);
         });
 
-        // Render dezelfde partial als in de eerste pageload
         $html = view('web.partials.orderlines-list', [
             'orderlines' => $orderlines,
             'event'      => $event,
@@ -112,39 +109,55 @@ class ManuelController extends Controller
                                 ]);
     }
 
-    public function checkin($uuid, $orderline_uuid)
+    public function checkin($org_slug, $slug, $orderline_uuid)
     {
-        $event = $this->apiService->getEventByUuid($uuid);
+        $organisation = Organisation::where('slug', $org_slug)->first();
+        abort_if(!$organisation, 404);
+
+        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
         abort_if(!$event, 404);
 
-        $response = $this->apiService->checkinOrderline($orderline_uuid);
+        // get orderline
+        $orderline = Orderline::where('uuid', $orderline_uuid)->first();
+        abort_if(!$orderline, 404);
 
-        if (isset($response['error'])) {
-            smilify('error', 'Inchecken is niet gelukt.');
-
-            return redirect()->route('scan.manuel', ['uuid' => $uuid]);
+        // Check if orderline is checked in
+        if ($orderline->scanned) {
+            smilify('info', 'Dit ticket is al ingecheckt.');
+            return redirect()->route('scan.manuel', ['org_slug' => $org_slug, 'slug' => $slug]);
         }
 
-        smilify('success', $response['message'] ?? 'Ticket is succesvol ingecheckt.');
-        return redirect()->route('scan.manuel', ['uuid' => $uuid]);
+        // Check in the orderline
+        $orderline->scanned = 1;
+        $orderline->save();
+
+        smilify('success', 'Ticket is succesvol ingecheckt.');
+        return redirect()->route('scan.manuel', ['org_slug' => $org_slug, 'slug' => $slug]);
     }
 
-    public function checkout($uuid, $orderline_uuid)
+    public function checkout($org_slug, $slug, $orderline_uuid)
     {
-        $event = $this->apiService->getEventByUuid($uuid);
+        $organisation = Organisation::where('slug', $org_slug)->first();
+        abort_if(!$organisation, 404);
+
+        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
         abort_if(!$event, 404);
 
-        // Call API to checkin
-        $response = $this->apiService->checkoutOrderline($orderline_uuid);
+        // get orderline
+        $orderline = Orderline::where('uuid', $orderline_uuid)->first();
+        abort_if(!$orderline, 404);
 
-        if (isset($response['error'])) {
-            smilify('error', 'Uitchecken is niet gelukt.');
-
-            return redirect()->route('scan.manuel', ['uuid' => $uuid]);
+        // Check if orderline is checked in
+        if (!$orderline->scanned) {
+            smilify('info', 'Dit ticket is al uitgecheckt.');
+            return redirect()->route('scan.manuel', ['org_slug' => $org_slug, 'slug' => $slug]);
         }
 
-        smilify('success', 'Ticket is succesvol Uitgecheckt.');
+        // Check in the orderline
+        $orderline->scanned = 0;
+        $orderline->save();
 
-        return redirect()->route('scan.manuel', ['uuid' => $uuid]);
+        smilify('success', 'Ticket is succesvol uitgecheckt.');
+        return redirect()->route('scan.manuel', ['org_slug' => $org_slug, 'slug' => $slug]);
     }
 }

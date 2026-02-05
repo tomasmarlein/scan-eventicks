@@ -27,7 +27,7 @@
             <div class="row">
                 <div class="col-lg-8">
                     <div class="mb-5">
-                        <a href="{{ route('scan.tickets', $event['uuid']) }}" class="text-white text-decoration-none">
+                        <a href="{{ route('scan.tickets', [$organisation['slug'], $event['slug']]) }}" class="text-white text-decoration-none">
                             <i class="fa-solid fa-arrow-left-long me-2 text-white"></i> Terug</a>
                     </div>
                     <h5 class="text-white">Scanner actief</h5>
@@ -62,7 +62,7 @@
                         </div>
 
                         <form id="resultForm" class="d-none" method="POST"
-                              action="{{ route('scan.result', $event['uuid']) }}">
+                              action="{{ route('scan.result', [$organisation['slug'], $event['slug']]) }}">
                             @method('POST')
                             @csrf
                             <input type="hidden" name="qr" id="qrField">
