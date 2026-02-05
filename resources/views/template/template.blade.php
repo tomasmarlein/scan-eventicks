@@ -5,7 +5,7 @@
         <meta http-equiv="x-ua-compatible" content="ie=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1, height=device-height, viewport-fit=cover">
         <meta name="description" content="">
-        <meta name="keywords" content="Lichtstoet Rozenberg, Rozenberg, Lichtstoet, Lightshow, Oudste lichtstoet" />
+        <meta name="keywords" content="Eventicks" />
         <meta name="author" content="Tomas Marlein">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -15,7 +15,12 @@
         <!-- iOS PWA support -->
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
 
         <title>@yield('title', env('APP_NAME'))</title>
 

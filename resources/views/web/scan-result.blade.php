@@ -5,7 +5,7 @@
     @if($scan['status'] === 'success')
         <style>
             :root {
-                --rl-primary: #EF7900;
+                --rl-primary: #1A3D8E;
             }
             html, body { height: 100%; overflow: hidden; background:#0b0b0b; }
             #valid-page {
@@ -66,7 +66,7 @@
                     {{-- Kop --}}
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
-                            <div class="chip mb-1">{{ $event['name'] ?? 'Mol-Centrum Rozenberg Lichtstoet' }}</div>
+                            <div class="chip mb-1">{{ $event['name'] ?? 'Onbekend' }}</div>
                             <h1 class="h4 m-0">
                                 Check-in geslaagd
                             </h1>
@@ -117,7 +117,7 @@
 
             {{-- Actieknoppen onderaan --}}
             <div class="cta-bar">
-                <form id="resultForm" class="w-100" method="POST" action="{{ route('scan.camera', $event['uuid']) }}">
+                <form id="resultForm" class="w-100" method="POST" action="{{ route('scan.camera', [$organisation['slug'], $event['slug']]) }}">
                     @method('POST')
                     @csrf
                     <input type="hidden" name="tickets" value='@json($tickets)'>
@@ -187,7 +187,7 @@
                     {{-- Kop --}}
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
-                            <div class="chip mb-1">{{ $event['name'] ?? 'Mol-Centrum Rozenberg Lichtstoet' }}</div>
+                            <div class="chip mb-1">{{ $event['name'] ?? 'Onbekend' }}</div>
                             <h1 class="h4 m-0">Check-in mislukt</h1>
                             <div class="text-secondary small">
                                 {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }} • Scanner #{{ auth()->id() }}
@@ -236,7 +236,7 @@
 
             {{-- Actieknoppen onderaan --}}
             <div class="cta-bar">
-                <form id="resultForm" class="w-100" method="POST" action="{{ route('scan.camera', $event['uuid']) }}">
+                <form id="resultForm" class="w-100" method="POST" action="{{ route('scan.camera', [$organisation['slug'], $event['slug']]) }}">
                     @method('POST')
                     @csrf
                     <input type="hidden" name="tickets" value='@json($tickets)'>

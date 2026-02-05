@@ -102,11 +102,11 @@
 
                 <div class="col-12">
                     <div class="btn-wrapper">
-                        <a href="{{ route('scan.tickets', $event['uuid']) }}" class="btn btn-primary">
+                        <a href="{{ route('scan.tickets', [$organisation['slug'], $event['slug']]) }}" class="btn btn-primary">
                             <i class="fa-light fa-qrcode-read me-3"></i>
                             Start scanner
                         </a>
-                        <a href="{{ route('scan.manuel', $event['uuid']) }}" class="btn btn-white">
+                        <a href="{{ route('scan.manuel', [$organisation['slug'], $event['slug']]) }}" class="btn btn-white">
                             <i class="fa-light fa-list-check me-3"></i>
                             Bekijk ticketlijst
                         </a>
