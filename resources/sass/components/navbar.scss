@@ -1,0 +1,26 @@
+#navbar {
+    background-color : $white;
+    border-bottom    : 1px solid $border-color;
+    padding          : 1rem .5rem;
+
+    .navbar-brand {
+        font-weight : normal;
+        font-size   : 1rem;
+        color       : $primary;
+    }
+}
+
+.offcanvas {
+    .round-circle {
+        background      : $primary;
+        border-radius   : 50%;
+        color           : $white;
+        display         : inline-flex;
+        align-items     : center;
+        justify-content : center;
+        width           : 3rem;
+        height          : 3rem;
+        font-size       : 1rem;
+        padding         : 1rem;
+    }
+}

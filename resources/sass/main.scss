@@ -1,0 +1,93 @@
+:root {
+    --mm-spacing : 2.5rem;
+
+    @include media-breakpoint-up(md) {
+        --mm-spacing : 5rem;
+    }
+
+    @include media-breakpoint-up(lg) {
+        --mm-spacing : 6.25rem;
+    }
+
+    @include media-breakpoint-up(xl) {
+        --mm-spacing : 7.5rem;
+    }
+
+    @include media-breakpoint-up(xxl) {
+        --mm-spacing : 10rem;
+    }
+}
+
+body {
+    font-size : $font-size-base;
+}
+
+h1, h2 {
+    color : $primary;
+}
+
+.section {
+    padding-bottom : var(--mm-spacing);
+    padding-top    : var(--mm-spacing);
+}
+
+.events_wrapper {
+    .event {
+        &_item {
+            &:not(:last-child) {
+                border-bottom : 1px solid $border-color;
+            }
+        }
+    }
+}
+
+.link-card {
+    i {
+        font-size     : 2.5rem;
+        margin-bottom : 1.5rem;
+    }
+}
+
+.ticket_wrapper {
+    h6 {
+        font-weight : 900 !important;
+    }
+}
+
+#page-scan {
+    #preview {
+        border-radius : .5rem;
+        overflow      : hidden;
+        border        : none;
+    }
+}
+
+.border-radius-lg {
+    border-radius : $border-radius-lg !important;
+}
+
+.border-1 {
+    border-color : $border-color;
+}
+
+.btn-wrapper {
+    display : grid;
+    gap     : .5rem;
+    @include media-breakpoint-up(sm) {
+        display     : flex;
+        align-items : flex-start;
+        gap         : 1rem;
+    }
+
+    .btn {
+        &:not(.btn-sm):not(.btn-lg) {
+            @include media-breakpoint-up(xl) {
+                padding : .875rem 1.75rem;
+            }
+        }
+    }
+}
+
+.bg-gray {
+    background-color : $gray-200 !important;
+}

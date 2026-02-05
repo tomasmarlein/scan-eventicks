@@ -1,0 +1,39 @@
+.event-card {
+    transition : .3s ease-in-out all;
+
+    &:hover {
+        box-shadow : 0 0 10px rgba($dark, .3);
+    }
+}
+
+.badge-name {
+    border        : 1px solid $dark;
+    border-radius : $border-radius;
+    padding       : .5rem .75rem;
+    font-size     : $font-size-sm;
+    color         : $dark;
+}
+
+.badge {
+    padding : .5rem .75rem;
+}
+
+.badge {
+    &.bg-danger-subtle {
+        background-color : rgba($danger, .1);
+        color            : $danger;
+        border           : 1px solid $danger;
+    }
+
+    &.bg-primary-subtle {
+        background-color : rgba($primary, .1);
+        color            : $primary;
+        border           : 1px solid $primary;
+    }
+
+    &.bg-dark-subtle {
+        background-color : rgba($dark, .1);
+        color            : $dark;
+        border           : 1px solid $dark;
+    }
+}
