@@ -23,12 +23,12 @@ class OverviewController extends Controller
         $userId = auth()->user()->id;
 
         if (auth()->user()->hasRole('admin')) {
-            $organisations = Organisation::with('users')->paginate(14);
+            $organisations = Organisation::with('users')->get();
         } else {
             $organisations = Organisation::with('users')
                                          ->whereHas('users', function ($query) use ($userId) {
                                              $query->where('user_id', $userId);
-                                         })->paginate(15);
+                                         })->get();
         }
 
         return view('web.organisations', [
