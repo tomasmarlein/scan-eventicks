@@ -24,8 +24,12 @@ jobs:
       - name: Directory Permissions
         run: chmod -R 777 storage bootstrap/cache
       - name: Write env file
+        shell: bash
         run: |
-          printf '%s' "${{ vars.ENV_TESTING }}" > .env
+          cat > .env <<'EOF'
+          ${{ vars.ENV_TESTING }}
+          EOF
+          sed -i 's/\r$//' .env
           chmod 600 .env
       - name: Upload .env to server
         uses: appleboy/scp-action@master
@@ -35,6 +39,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           source: ".env"
           target: "~/domains/tm-test.be/public_html/scan-eventicks"
+          overwrite: true
       - name: Deploy to testing
         uses: appleboy/ssh-action@master
         with:
