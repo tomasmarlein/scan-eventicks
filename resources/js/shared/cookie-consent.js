@@ -30,7 +30,7 @@ CookieConsent.run({
             nl: {
                 consentModal: {
                     title: "Wij gebruiken cookies",
-                    description: "Welkom bij Mol-Centrum Rozenberg Lichtstoet. Wij gebruiken cookies op onze site. Lees hierover meer in onze <a href=\"/cookie-policy\">Cookie Statement</a>.",
+                    description: "Welkom bij Eventicks. Wij gebruiken cookies op onze site. Lees hierover meer in onze <a href=\"/cookie-policy\">Cookie Statement</a>.",
                     acceptAllBtn: "Ik ga akkoord met alle cookies",
                     // acceptNecessaryBtn: "Reject all",
                     showPreferencesBtn: "Beheer mijn voorkeuren",
@@ -46,7 +46,7 @@ CookieConsent.run({
                     sections: [
                         {
                             title: "Cookie gebruik",
-                            description: "Welkom bij Mol-Centrum Rozenberg Lichtstoet. Wij gebruiken cookies op onze site.\n"
+                            description: "Welkom bij Eventicks. Wij gebruiken cookies op onze site.\n"
                         },
                         {
                             title: "Noodzakelijke cookies <span class=\"pm__badge\">Always Enabled</span>",
