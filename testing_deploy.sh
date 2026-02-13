@@ -16,8 +16,6 @@ git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 git clean -fd
 
-cp .env.testing .env
-
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
 npm ci
