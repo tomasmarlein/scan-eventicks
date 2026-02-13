@@ -15,9 +15,6 @@ git checkout main
 git reset --hard origin/main
 git clean -fd
 
-# Env
-cp .env.prod .env
-
 # Install PHP depsg
 composer install --no-interaction --prefer-dist --optimize-autoloader
 

@@ -23,6 +23,18 @@ jobs:
         run: composer install --prefer-dist
       - name: Directory Permissions
         run: chmod -R 777 storage bootstrap/cache
+      - name: Write env file
+        run: |
+          printf '%s' "${{ secrets.ENV_TESTING }}" > .env
+          chmod 600 .env
+      - name: Upload .env to server
+        uses: appleboy/scp-action@master
+        with:
+          username: ${{ secrets.SSH_USERNAME }}
+          host: ${{ secrets.SSH_HOST }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: ".env"
+          target: "~/domains/tm-test.be/public_html/scan-eventicks"
       - name: Deploy to testing
         uses: appleboy/ssh-action@master
         with:
