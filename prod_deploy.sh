@@ -25,6 +25,9 @@ composer install --no-interaction --prefer-dist --optimize-autoloader
 npm ci
 npm run build
 
+# Migrate (uncomment if you want it)
+php artisan migrate --force
+
 # Laravel housekeeping
 php artisan storage:link || true
 php artisan optimize:clear
@@ -33,9 +36,6 @@ php artisan cache:clear
 php artisan route:clear
 php artisan view:clear
 php artisan icons:cache
-
-# Migrate (uncomment if you want it)
-php artisan migrate --force
 
 # Back up
 php artisan up

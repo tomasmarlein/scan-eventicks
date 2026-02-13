@@ -23,6 +23,8 @@ composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 npm ci
 npm run build
 
+php artisan migrate --force
+
 php artisan storage:link || true
 php artisan optimize:clear
 php artisan config:clear
@@ -30,8 +32,6 @@ php artisan cache:clear
 php artisan route:clear
 php artisan view:clear
 php artisan icons:cache
-
-php artisan migrate --force
 
 php artisan up
 
