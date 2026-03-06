@@ -141,14 +141,25 @@ class ScanController extends Controller
          */
         if ((bool) ($orderline->blocked ?? false)) {
             $scan['status']  = 'warning';
+            $scan['message'] = 'Ticket is geblokkeerd.';
+            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
+        }
+
+        /**
+         * 4) Al gescand
+         * Ik neem aan: blocked=true betekent "al ingecheckt".
+         * Als jij een ander veld hebt (checked_in_at), zeg het en ik pas aan.
+         */
+        if ((bool) ($orderline->scanned ?? false)) {
+            $scan['status']  = 'warning';
             $scan['message'] = 'Ticket is al ingecheckt (al gescand).';
             return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
         }
 
         /**
-         * 4) Geldig: markeer als gescand + success
+         * 5) Geldig: markeer als gescand + success
          */
-        $orderline->blocked = true;
+        $orderline->scanned = true;
         // $orderline->checked_in_at = now(); // als je dit veld hebt
         // $orderline->checked_in_by = auth()->id(); // idem
         $orderline->save();
