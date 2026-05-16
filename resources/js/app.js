@@ -1,41 +1,69 @@
 import './bootstrap';
 import '../sass/app.scss';
-import './shared/cookie-consent.js';
-import './shared/ckeditor';
 
+async function bootDatePickers() {
+    const hasDatePickers = document.querySelector('.datepicker, .datepicker-year, .datepicker-time');
 
-// Flatpickr
-import flatpickr from "flatpickr";
-import "flatpickr/dist/flatpickr.min.css";
-import { Dutch } from "flatpickr/dist/l10n/nl.js";
+    if (!hasDatePickers) {
+        return;
+    }
+
+    const [{ default: flatpickr }, { Dutch }] = await Promise.all([
+        import('flatpickr'),
+        import('flatpickr/dist/l10n/nl.js'),
+        import('flatpickr/dist/flatpickr.min.css'),
+    ]);
+
+    document.querySelectorAll('.datepicker').forEach(element => {
+        flatpickr(element, {
+            dateFormat: 'Y-m-d',
+            locale: Dutch,
+        });
+    });
+
+    document.querySelectorAll('.datepicker-year').forEach(element => {
+        flatpickr(element, {
+            enableTime: false,
+            dateFormat: 'Y',
+            locale: Dutch,
+            defaultDate: new Date(),
+            onReady: function (_selectedDates, _dateStr, instance) {
+                instance.calendarContainer.classList.add('flatpickr-year-only');
+                instance.calendarContainer.querySelector('.flatpickr-days')?.style.setProperty('display', 'none');
+                instance.calendarContainer.querySelector('.flatpickr-months')?.style.setProperty('display', 'none');
+            },
+        });
+    });
+
+    document.querySelectorAll('.datepicker-time').forEach(element => {
+        flatpickr(element, {
+            enableTime: true,
+            dateFormat: 'Y-m-d H:i:S',
+            locale: Dutch,
+            time_24hr: true,
+            inline: false,
+        });
+    });
+}
+
+function bootTooltips() {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(element => {
+        new window.bootstrap.Tooltip(element);
+    });
+}
+
+async function bootOptionalModules() {
+    if (document.querySelector('.ckeditor')) {
+        await import('./shared/ckeditor');
+    }
+
+    if (document.querySelector('[data-cookie-consent]')) {
+        await import('./shared/cookie-consent');
+    }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
-    flatpickr(".datepicker", {
-        dateFormat: "Y-m-d", // Optioneel: Stel het formaat van de datum in
-        locale: Dutch        // Optioneel: Stel de taal in (in dit geval Nederlands)
-    });
-
-    flatpickr(".datepicker-year", {
-        enableTime: false,
-        dateFormat: "Y",
-        locale: Dutch,
-        defaultDate: new Date(), // Optioneel: standaard het huidige jaar selecteren
-        onReady: function(selectedDates, dateStr, instance) {
-            instance.calendarContainer.classList.add("flatpickr-year-only");
-            document.querySelector(".flatpickr-days").style.display = "none"; // Verberg dagen
-            document.querySelector(".flatpickr-months").style.display = "none"; // Verberg maanden
-        }
-    });
-
-    flatpickr(".datepicker-time", {
-        enableTime: true,
-        dateFormat: "Y-m-d H:i:s",
-        locale: Dutch,
-        time_24hr: true,
-        inline: false,
-    });
-
-    $(function () {
-        $('[data-toggle="tooltip"]').tooltip();
-    });
+    bootTooltips();
+    void bootDatePickers();
+    void bootOptionalModules();
 });

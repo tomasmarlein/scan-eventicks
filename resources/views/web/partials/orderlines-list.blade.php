@@ -1,42 +1,46 @@
-@foreach($orderlines as $orderline)
+@forelse($orderlines as $orderline)
     <div class="col-12">
         <div class="card border-1 bg-white p-3 border-radius-lg">
-            <div class="row align-items-center">
+            <div class="row align-items-center g-3">
                 <div class="col-8">
-                    <h3>{{ $orderline['unique_qr_id'] }}</h3>
+                    <h3 class="h6 mb-2">{{ $orderline['unique_qr_id'] ?? 'Onbekende QR' }}</h3>
                     <div class="mb-3">
-                        <span class="text-muted">{{ $orderline['name'] }}</span>
+                        <span class="text-muted">{{ $orderline['name'] ?? 'Naam onbekend' }}</span>
                     </div>
                     <div>
-                        @if($orderline['blocked'])
-                            <span class="badge bg-danger-subtle text-danger">
-                            Geblokkeerd
-                        </span>
-                        @elseif($orderline['scanned'])
-                            <span class="badge bg-dark-subtle text-dark">
-                            Gescand
-                        </span>
+                        @if(!empty($orderline['blocked']))
+                            <span class="badge bg-danger-subtle text-danger">Geblokkeerd</span>
+                        @elseif(!empty($orderline['scanned']))
+                            <span class="badge bg-dark-subtle text-dark">Gescand</span>
                         @else
-                            <span class="badge bg-primary-subtle text-primary">
-                            Geldig
-                        </span>
+                            <span class="badge bg-primary-subtle text-primary">Geldig</span>
                         @endif
                     </div>
                 </div>
-                <div class="col-4 text-center">
-                    @if($orderline['blocked'])
+                <div class="col-4 text-end">
+                    @if(!empty($orderline['blocked']))
                         <i class="fa-light fa-circle-xmark text-danger" style="font-size: 1.5rem;"></i>
-                    @elseif($orderline['scanned'])
-                        <i class="fa-kit fa-light-ticket-circle-check text-dark" style="font-size: 1.5rem;"></i>
+                    @elseif(!empty($orderline['scanned']))
+                        <form method="POST" action="{{ $orderline['url_checkout'] ?? '#' }}" class="d-inline">
+                            @csrf
+                            <button class="btn btn-white btn-sm" type="submit">Check-uit</button>
+                        </form>
+                    @elseif(!empty($orderline['url_checkin']))
+                        <form method="POST" action="{{ $orderline['url_checkin'] }}" class="d-inline">
+                            @csrf
+                            <button class="btn btn-primary btn-sm" type="submit">Check-in</button>
+                        </form>
                     @else
-                        <a class="btn btn-primary" title="Valideren"
-                           href="{{ $orderline['url_checkin'] ?? '#' }}"
-                           style="padding: .5rem 1rem;">
-                            Check-in
-                        </a>
+                        <span class="text-muted small">Geen actie</span>
                     @endif
                 </div>
             </div>
         </div>
     </div>
-@endforeach
+@empty
+    <div class="col-12">
+        <div class="card border-1 bg-white p-4 border-radius-lg text-center text-muted">
+            Geen tickets gevonden.
+        </div>
+    </div>
+@endforelse

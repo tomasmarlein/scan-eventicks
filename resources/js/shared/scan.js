@@ -8,217 +8,384 @@ const torchBtn = document.getElementById("torchBtn");
 const statusEl = document.getElementById("status");
 const qrField  = document.getElementById("qrField");
 const form     = document.getElementById("resultForm");
+const page     = document.getElementById("page-scan");
+
+const feedback = document.getElementById("scanFeedback");
+const feedbackTitle = document.getElementById("scanFeedbackTitle");
+const feedbackMessage = document.getElementById("scanFeedbackMessage");
+const feedbackName = document.getElementById("scanFeedbackName");
+const feedbackTicket = document.getElementById("scanFeedbackTicket");
+const feedbackOrder = document.getElementById("scanFeedbackOrder");
+
+const feedbackMs = Number.parseInt(page?.dataset?.feedbackMs || "1400", 10);
+const recentScanTtlMs = Math.max(feedbackMs + 1200, 3500);
 
 let reader = null;
 let controls = null;
-let lastValue = null;
-let submitting = false;
 let currentStream = null;
 let currentVideoTrack = null;
 let torchOn = false;
+let submitting = false;
+let feedbackTimer = null;
+let resumeTimer = null;
+const recentScans = new Map();
 
-// ---------- Helpers
-function setStatus(msg) {
-    if (statusEl) statusEl.textContent = msg;
+if (!video || !form || !qrField) {
+    throw new Error("Scanner markup ontbreekt op deze pagina.");
+}
+
+function setStatus(message) {
+    if (statusEl) {
+        statusEl.textContent = message;
+    }
+}
+
+function pruneRecentScans(now = Date.now()) {
+    for (const [value, expiresAt] of recentScans.entries()) {
+        if (expiresAt <= now) {
+            recentScans.delete(value);
+        }
+    }
+}
+
+function isRecentDuplicate(value) {
+    const now = Date.now();
+    pruneRecentScans(now);
+
+    if (recentScans.has(value)) {
+        return true;
+    }
+
+    recentScans.set(value, now + recentScanTtlMs);
+    return false;
 }
 
 function clearState() {
-    lastValue = null;
     torchOn = false;
     currentVideoTrack = null;
     currentStream = null;
-    if (torchBtn) torchBtn.disabled = true;
+
+    if (torchBtn) {
+        torchBtn.disabled = true;
+    }
 }
 
 function setTorchButtonState(track) {
+    if (!torchBtn) {
+        return;
+    }
+
     try {
         const caps = track?.getCapabilities?.();
-        const hasTorch = !!caps?.torch;
-        torchBtn.disabled = !hasTorch;
-        // eventueel andere UI state hier
+        torchBtn.disabled = !caps?.torch;
+        torchBtn.classList.toggle("is-active", torchOn);
     } catch {
         torchBtn.disabled = true;
     }
 }
 
 async function applyTorch(on) {
-    if (!currentVideoTrack) return;
+    if (!currentVideoTrack) {
+        return;
+    }
+
     try {
-        await currentVideoTrack.applyConstraints({ advanced: [{ torch: !!on }] });
-        torchOn = !!on;
+        await currentVideoTrack.applyConstraints({ advanced: [{ torch: Boolean(on) }] });
+        torchOn = Boolean(on);
         setTorchButtonState(currentVideoTrack);
-    } catch (e) {
-        console.warn("Torch niet beschikbaar of geweigerd:", e);
-        torchBtn.disabled = true;
+    } catch (error) {
+        console.warn("Torch niet beschikbaar of geweigerd:", error);
+        if (torchBtn) {
+            torchBtn.disabled = true;
+        }
     }
 }
 
 async function listCameras() {
+    if (!select || !navigator.mediaDevices?.enumerateDevices) {
+        return;
+    }
+
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const videos  = devices.filter(d => d.kind === 'videoinput');
+    const videos = devices.filter(device => device.kind === "videoinput");
+    const selectedDevice = select.value;
 
     select.innerHTML = "";
-    videos.forEach((d, i) => {
-        const opt = document.createElement("option");
-        opt.value = d.deviceId || "";                 // mogelijk lege deviceId vooraf
-        opt.textContent = d.label || `Camera ${i+1}`; // labels komen na toestemming
-        select.appendChild(opt);
+
+    videos.forEach((device, index) => {
+        const option = document.createElement("option");
+        option.value = device.deviceId || "";
+        option.textContent = device.label || `Camera ${index + 1}`;
+        select.appendChild(option);
     });
 
-    const prefer = [...select.options].find(o => /back|rear|environment/i.test(o.textContent));
-    if (prefer) select.value = prefer.value;
+    if ([...select.options].some(option => option.value === selectedDevice)) {
+        select.value = selectedDevice;
+        return;
+    }
+
+    const preferred = [...select.options].find(option => /back|rear|environment/i.test(option.textContent));
+
+    if (preferred) {
+        select.value = preferred.value;
+    }
 }
 
 function stopDecoderAndStream() {
+    window.clearTimeout(resumeTimer);
+
     try {
-        if (controls) {
-            controls.stop();
-            controls = null;
-        }
-    } catch (e) {
-        console.debug("ZXing controls stop issue", e);
+        controls?.stop?.();
+    } catch (error) {
+        console.debug("ZXing controls stop issue", error);
     }
+
+    controls = null;
+
     try {
-        if (currentStream) {
-            currentStream.getTracks().forEach(t => t.stop());
-        }
-    } catch (e) {
-        console.debug("Stream stop issue", e);
+        currentStream?.getTracks?.().forEach(track => track.stop());
+    } catch (error) {
+        console.debug("Stream stop issue", error);
     }
+
     try {
-        if (video) {
-            video.pause?.();
-            video.srcObject = null;
-            // playsinline/autoplay blijven staan
-        }
-    } catch (e) {
-        console.debug("Video detach issue", e);
+        video.pause?.();
+        video.srcObject = null;
+    } catch (error) {
+        console.debug("Video detach issue", error);
     }
+
     clearState();
 }
 
 function stop() {
     stopDecoderAndStream();
-    if (startBtn) startBtn.disabled = false;
-    if (stopBtn)  stopBtn.disabled  = true;
+
+    if (startBtn) {
+        startBtn.disabled = false;
+    }
+
+    if (stopBtn) {
+        stopBtn.disabled = true;
+    }
+
     setStatus("Status: gestopt.");
 }
 
-// Netjes opruimen voordat we de pagina verlaten of navigeren
-function navigateAwayCleanup() {
-    stop();
-    reader = null; // force volledige re-init bij terugkeer
-}
-
-// ---------- Start flow
 async function start() {
-    // reset submit-state bij een nieuwe scan-sessie
-    submitting = false;
-    lastValue  = null;
+    stopDecoderAndStream();
 
-    // stop eerst alles (idempotent)
-    stop();
+    if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("Camera wordt niet ondersteund door deze browser.");
+        return;
+    }
 
-    video.setAttribute('playsinline','');
+    video.setAttribute("playsinline", "");
     video.muted = true;
     video.autoplay = true;
 
-    if (!reader) reader = new BrowserMultiFormatReader();
+    if (!reader) {
+        reader = new BrowserMultiFormatReader();
+    }
 
-    // wanneer select nog geen geldige deviceId heeft, laat ZXing zelf kiezen
     const deviceId = select?.value || undefined;
     setStatus("Status: camera starten...");
 
     try {
-        controls = await reader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+        controls = await reader.decodeFromVideoDevice(deviceId, video, (result, error) => {
             if (result) {
-                const text = result.getText();
-                if (text && text !== lastValue && !submitting) {
-                    lastValue = text;
-                    setStatus(`QR gevonden: ${text}`);
-                    submitting = true;
-                    qrField.value = text;
-
-                    // vóór navigeren: alles vrijgeven
-                    navigateAwayCleanup();
-                    form.submit();
-                }
+                void handleScanResult(result.getText());
             }
-            if (err && err?.name !== "NotFoundException") {
-                console.debug(err);
+
+            if (error && error?.name !== "NotFoundException") {
+                console.debug(error);
             }
         });
 
-        // Wacht tot stream hangt, dan expliciet starten (Android)
-        currentStream     = video.srcObject;
+        currentStream = video.srcObject;
         currentVideoTrack = currentStream?.getVideoTracks?.()[0] || null;
-        await video.play().catch(() => {}); // voorkom unhandled promise
 
-        // nu labels opnieuw vullen (na permissie zijn ze zichtbaar)
+        await video.play().catch(() => {});
         await listCameras();
 
         torchOn = false;
         setTorchButtonState(currentVideoTrack);
 
-        startBtn.disabled = true;
-        stopBtn.disabled  = false;
+        if (startBtn) {
+            startBtn.disabled = true;
+        }
+
+        if (stopBtn) {
+            stopBtn.disabled = false;
+        }
+
         setStatus("Status: scannen… richt de QR naar de camera.");
-    } catch (e) {
-        console.error('start() error:', e?.name, e?.message);
+    } catch (error) {
+        console.error("Camera start error:", error?.name, error?.message);
+
         setStatus(
-            e?.name === 'NotReadableError'
-            ? 'Camera is bezet door een andere app/tab. Sluit die en probeer opnieuw.'
-            : e?.name === 'NotAllowedError'
-              ? 'Toegang geweigerd. Controleer camera-toestemming in de browser.'
-              : 'Kon camera’s niet starten. Toestemming gegeven en via HTTPS?'
+            error?.name === "NotReadableError"
+                ? "Camera is bezet door een andere app of tab. Sluit die en probeer opnieuw."
+                : error?.name === "NotAllowedError"
+                    ? "Toegang geweigerd. Controleer de camera-toestemming in de browser."
+                    : "Kon camera niet starten. Gebruik HTTPS en geef camera-toestemming."
         );
-        startBtn.disabled = false;
-        stopBtn.disabled  = true;
+
+        if (startBtn) {
+            startBtn.disabled = false;
+        }
+
+        if (stopBtn) {
+            stopBtn.disabled = true;
+        }
     }
 }
 
-// ---------- Events & lifecycle
-startBtn?.addEventListener("click", start);
+async function handleScanResult(rawValue) {
+    const value = String(rawValue || "").trim();
+
+    if (!value || submitting || isRecentDuplicate(value)) {
+        return;
+    }
+
+    submitting = true;
+    qrField.value = value;
+    setStatus("Status: ticket verwerken...");
+
+    try {
+        const response = await fetch(form.action, {
+            method: "POST",
+            body: new FormData(form),
+            credentials: "same-origin",
+            headers: {
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Scan request failed with status ${response.status}`);
+        }
+
+        const payload = await response.json();
+        showFeedback(payload.scan || {
+            status: payload.status || "error",
+            message: payload.message || "Scan verwerkt.",
+        });
+    } catch (error) {
+        console.error("Scan submit error:", error);
+        showFeedback({
+            status: "error",
+            message: "Scan kon niet verzonden worden. Controleer de verbinding en probeer opnieuw.",
+            orderline: {
+                name: null,
+                unique_qr_id: value,
+                ticket: { name: null, price: null },
+            },
+            order_ref: null,
+        });
+    } finally {
+        window.clearTimeout(resumeTimer);
+        resumeTimer = window.setTimeout(() => {
+            submitting = false;
+            setStatus("Status: scannen… richt de QR naar de camera.");
+        }, feedbackMs);
+    }
+}
+
+function showFeedback(scan) {
+    const status = scan?.status || "error";
+    const title = status === "success"
+        ? "Geldig ticket"
+        : status === "warning"
+            ? "Let op"
+            : "Ongeldig ticket";
+
+    if (feedback) {
+        feedback.dataset.status = status;
+        feedback.classList.add("is-visible");
+    }
+
+    if (feedbackTitle) {
+        feedbackTitle.textContent = title;
+    }
+
+    if (feedbackMessage) {
+        feedbackMessage.textContent = scan?.message || "Scan verwerkt.";
+    }
+
+    if (feedbackName) {
+        feedbackName.textContent = `Naam: ${scan?.orderline?.name || "-"}`;
+    }
+
+    if (feedbackTicket) {
+        feedbackTicket.textContent = `Ticket: ${scan?.orderline?.ticket?.name || "-"}`;
+    }
+
+    if (feedbackOrder) {
+        feedbackOrder.textContent = `Order: ${scan?.order_ref || scan?.orderline?.unique_qr_id || "-"}`;
+    }
+
+    playFeedback(status);
+
+    window.clearTimeout(feedbackTimer);
+    feedbackTimer = window.setTimeout(() => {
+        feedback?.classList.remove("is-visible");
+    }, feedbackMs);
+}
+
+function playFeedback(status) {
+    const success = status === "success";
+    const pattern = success ? [40, 30, 40] : [80, 50, 80];
+    const soundFile = success ? "/sounds/success.mp3" : "/sounds/error.mp3";
+
+    try {
+        if ("vibrate" in navigator) {
+            navigator.vibrate(pattern);
+        }
+    } catch {
+        // Ignore unsupported haptics.
+    }
+
+    try {
+        const audio = new Audio(soundFile);
+        audio.volume = 0.8;
+        audio.play().catch(() => {});
+    } catch {
+        // Ignore blocked autoplay/audio errors.
+    }
+}
+
+startBtn?.addEventListener("click", () => void start());
 stopBtn?.addEventListener("click", stop);
-torchBtn?.addEventListener("click", async () => {
-    if (!currentVideoTrack || torchBtn.disabled) return;
-    await applyTorch(!torchOn);
+torchBtn?.addEventListener("click", () => void applyTorch(!torchOn));
+select?.addEventListener("change", () => void start());
+
+window.addEventListener("pagehide", stop);
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        stop();
+        return;
+    }
+
+    resumeTimer = window.setTimeout(() => void start(), 150);
 });
 
-// Auto-init bij eerste load
 (async () => {
     try {
         await listCameras();
         await start();
-    } catch (e) {
-        console.error(e);
-        setStatus("Kon camera’s niet starten. Toestemming gegeven en via HTTPS?");
-        if (startBtn) startBtn.disabled = false;
-        if (stopBtn)  stopBtn.disabled  = true;
+    } catch (error) {
+        console.error(error);
+        setStatus("Kon camera niet starten. Geef camera-toestemming en gebruik HTTPS.");
+
+        if (startBtn) {
+            startBtn.disabled = false;
+        }
+
+        if (stopBtn) {
+            stopBtn.disabled = true;
+        }
     }
 })();
-
-// Volledige cleanup wanneer je weggaat (ook SPA → andere route, of form submit)
-window.addEventListener('pagehide', navigateAwayCleanup);
-
-// Terugkeer (ook via bfcache): forceer re-init
-window.addEventListener('pageshow', async (e) => {
-    // Android: even laten “landen”
-    setTimeout(async () => {
-        if (!submitting) {
-            await listCameras();
-            await start();
-        }
-    }, 50);
-});
-
-document.addEventListener('visibilitychange', async () => {
-    if (document.hidden) {
-        stop();
-    } else {
-        if (!submitting) {
-            await listCameras();
-            await start();
-        }
-    }
-});

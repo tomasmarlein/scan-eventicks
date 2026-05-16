@@ -37,6 +37,8 @@ return [
 
     'api' => [
         'base_uri' => env('API_BASE_URI', 'https://tickets.rozenberglichtstoet.be/api'),
+        'token' => env('API_TOKEN'),
+        'timeout' => env('API_TIMEOUT', 8),
     ],
 
 ];

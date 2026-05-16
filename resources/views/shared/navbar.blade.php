@@ -1,7 +1,7 @@
 <nav id="navbar" class="navbar navbar-light">
     <div class="container">
         <a class="navbar-brand" href="/">
-            {{ env('APP_NAME') }}
+            {{ config('app.name') }}
         </a>
         <button id="navbar-toggler" class="navbar-toggler border-0" type="button"
                 data-bs-toggle="offcanvas" data-bs-target="#navigation" aria-controls="navigation"
@@ -51,10 +51,13 @@
 
         <ul class="nav gap-2">
             <li class="card p-3 bg-transparent border-radius-md border-1 w-100">
-                <a href="{{ route('logout') }}" class="text-danger">
-                    <i class="fa-light fa-arrow-right-from-bracket me-3"></i>
-                    uitloggen
-                </a>
+                <form method="POST" action="{{ route('logout') }}" class="m-0">
+                    @csrf
+                    <button type="submit" class="btn btn-link text-danger p-0 text-decoration-none">
+                        <i class="fa-light fa-arrow-right-from-bracket me-3"></i>
+                        uitloggen
+                    </button>
+                </form>
             </li>
         </ul>
     </div>

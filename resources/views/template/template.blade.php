@@ -4,40 +4,31 @@
         <meta charset="utf-8">
         <meta http-equiv="x-ua-compatible" content="ie=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1, height=device-height, viewport-fit=cover">
-        <meta name="description" content="">
-        <meta name="keywords" content="Eventicks" />
-        <meta name="author" content="Tomas Marlein">
+        <meta name="description" content="Eventicks ticketscanner">
+        <meta name="keywords" content="Eventicks">
+        <meta name="author" content="Eventicks">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-
-        <link rel="manifest" href="/manifest.webmanifest">
         <meta name="theme-color" content="#EF7900">
 
-        <!-- iOS PWA support -->
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="shortcut icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="manifest" href="/site.webmanifest" />
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="shortcut icon" href="/favicon.ico">
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 
-        <title>@yield('title', env('APP_NAME'))</title>
+        <title>@yield('title', config('app.name'))</title>
 
-        {{--  Font awesome  --}}
-        <script src="https://kit.fontawesome.com/4baa8ea5d9.js" crossorigin="anonymous"></script>
+        <script src="https://kit.fontawesome.com/4baa8ea5d9.js" crossorigin="anonymous" defer></script>
 
-        {{--  Google fonts  --}}
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
 
         @notifyCss
 
-        <!-- Styles / Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orestbida/cookieconsent@3.0.1/dist/cookieconsent.css">
 
         @yield('css_after')
 
@@ -54,13 +45,5 @@
 
         <x-notify::notify />
         @notifyJs
-
-        <script>
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
-                });
-            }
-        </script>
     </body>
 </html>

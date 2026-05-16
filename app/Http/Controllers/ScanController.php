@@ -2,170 +2,152 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Event;
+use App\Http\Controllers\Concerns\ResolvesScannerContext;
 use App\Models\Orderline;
-use App\Models\Organisation;
-use App\Models\User;
-use App\Services\ApiService;
+use App\Models\Ticket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class ScanController extends Controller
 {
-    protected $apiService;
+    use ResolvesScannerContext;
 
-    public function __construct(ApiService $apiService)
+    public function index(string $org_slug, string $slug)
     {
-        $this->apiService = $apiService;
-    }
+        $organisation = $this->resolveOrganisation($org_slug);
 
-    public function index($org_slug, $slug)
-    {
-        $organisation = Organisation::where('slug', $org_slug)->first();
-
-        if (!$organisation) {
-            abort(404);
-        }
-
-        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
-
-        if (!$event) {
-            abort(404);
-        }
+        $event = $this->resolveEventForOrganisation(
+            $organisation,
+            $slug,
+            ['tickets'],
+            ['id', 'uuid', 'organisation_id', 'name', 'slug'],
+        );
 
         return view('web.tickets', [
             'organisation' => $organisation,
-            'event'        => $event,
+            'event' => $event,
         ]);
     }
 
-    public function camera(Request $request, $org_slug, $slug)
+    public function camera(Request $request, string $org_slug, string $slug)
     {
-        $request->validate([
-                               'tickets' => 'required',
-                           ],
-                           [
-                               'tickets.required' => 'Er zijn geen tickets geselecteerd. Je moet minstens 1 ticket selecteren om te scannen.',
-                           ]);
+        $organisation = $this->resolveOrganisation($org_slug);
 
-        $tickets = $request->tickets;
+        $event = $this->resolveEventForOrganisation(
+            $organisation,
+            $slug,
+            ['tickets'],
+            ['id', 'uuid', 'organisation_id', 'name', 'slug'],
+        );
 
-        // Check if tickets is a JSON string and decode it
-        if (is_string($tickets)) {
-            $tickets = json_decode($tickets, true);
-        }
+        $tickets = $this->extractTicketIds($request->input('tickets', []));
+        $validTicketIds = $event->tickets->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $tickets = array_values(array_intersect($tickets, $validTicketIds));
 
-        $organisation = Organisation::where('slug', $org_slug)->first();
-
-        if (!$organisation) {
-            abort(404);
-        }
-
-        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
-
-        if (!$event) {
-            abort(404);
+        if ($tickets === []) {
+            return back()->withErrors([
+                'tickets' => 'Er zijn geen geldige tickettypes geselecteerd. Selecteer minstens 1 tickettype om te scannen.',
+            ])->withInput();
         }
 
         return view('web.scan', [
             'organisation' => $organisation,
-            'event'        => $event,
-            'event_id'     => $event['id'],
-            'tickets'      => $tickets,
+            'event' => $event,
+            'event_id' => $event->id,
+            'tickets' => $tickets,
+            'feedbackMs' => (int) config('scanner.scan_feedback_ms', 1400),
         ]);
     }
 
-    public function store($org_slug, $event_slug, Request $request)
+    public function store(string $org_slug, string $event_slug, Request $request)
     {
-        $organisation = Organisation::where('slug', $org_slug)->firstOrFail();
+        $organisation = $this->resolveOrganisation($org_slug);
 
-        $event = Event::with('tickets.orderlines')->where('slug', $event_slug)->firstOrFail();
+        $event = $this->resolveEventForOrganisation(
+            $organisation,
+            $event_slug,
+            [],
+            ['id', 'uuid', 'organisation_id', 'name', 'slug'],
+        );
 
         $data = $request->validate([
-           'qr'      => ['required', 'string', 'max:4096'],
-           'tickets' => ['nullable'],
+            'qr' => ['required', 'string', 'max:4096'],
+            'tickets' => ['nullable'],
         ]);
 
-        $qr = trim($data['qr']);
+        $qr = $this->normalizeQrValue($data['qr']);
+        $tickets = $this->extractTicketIds($request->input('tickets', []));
+        $scan = $this->baseScanPayload($qr);
 
-        // Basis scan response (altijd aanwezig)
-        $scan = [
-            'status'   => 'error',   // success|warning|error
-            'message'  => 'Onbekende fout.',
-            'zone'     => 'Algemeen',
-            'order_ref'=> null,
-            'orderline'=> [
-                'name' => null,
-                'unique_qr_id' => $qr,
-                'ticket' => [
-                    'name'  => null,
-                    'price' => null,
-                ],
-            ],
-        ];
+        try {
+            $scan = DB::connection((new Orderline)->getConnectionName())->transaction(function () use ($event, $qr, $tickets, $scan) {
+                $query = Orderline::query()
+                    ->matchingQr($qr)
+                    ->with('ticket')
+                    ->lockForUpdate();
 
-        $tickets = json_decode($request->input('tickets', '[]'), true) ?: [];
+                $columns = Orderline::scannerSelectColumns();
 
-        // Get orderline
-        $orderline = Orderline::where('uuid', $qr)->first();
+                if ($columns !== []) {
+                    $query->select($columns);
+                }
 
-        if (!$orderline) {
-            $scan['status']  = 'error';
-            $scan['message'] = 'Ticket bestaat niet.';
-            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
+                $orderline = $query->first();
+
+                if (! $orderline instanceof Orderline) {
+                    return array_replace_recursive($scan, [
+                        'status' => 'error',
+                        'message' => 'Ticket bestaat niet.',
+                    ]);
+                }
+
+                $payload = $this->scanPayloadFromOrderline($scan, $orderline, $qr);
+
+                if ((int) $orderline->event_id !== (int) $event->id) {
+                    return array_replace_recursive($payload, [
+                        'status' => 'error',
+                        'message' => 'Ticket hoort bij een ander evenement.',
+                    ]);
+                }
+
+                if ($tickets !== [] && ! in_array((int) $orderline->ticket_id, $tickets, true)) {
+                    return array_replace_recursive($payload, [
+                        'status' => 'error',
+                        'message' => 'Dit tickettype is niet geselecteerd voor deze scanner.',
+                    ]);
+                }
+
+                if ((bool) ($orderline->blocked ?? false)) {
+                    return array_replace_recursive($payload, [
+                        'status' => 'warning',
+                        'message' => 'Ticket is geblokkeerd.',
+                    ]);
+                }
+
+                if ((bool) ($orderline->scanned ?? false)) {
+                    return array_replace_recursive($payload, [
+                        'status' => 'warning',
+                        'message' => 'Ticket is al ingecheckt.',
+                    ]);
+                }
+
+                $orderline->forceFill(['scanned' => true])->save();
+                $this->incrementScannerCount();
+
+                return array_replace_recursive($payload, [
+                    'status' => 'success',
+                    'message' => 'Geldig ticket. Check-in geslaagd.',
+                ]);
+            }, 3);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            $scan = array_replace_recursive($scan, [
+                'status' => 'error',
+                'message' => 'Scan kon niet verwerkt worden. Probeer opnieuw.',
+            ]);
         }
-
-        $scan['order_ref'] = $orderline->order_reference ?? null;
-        $scan['zone']      = $orderline->zone ?? 'Algemeen';
-        $scan['orderline'] = [
-            'name' => $orderline->name ?? null,
-            'unique_qr_id' => $orderline->unique_qr_id ?? $orderline->uuid ?? $qr,
-            'ticket' => [
-                'name'  => optional($orderline->ticket)->name,
-                'price' => optional($orderline->ticket)->price,
-            ],
-        ];
-
-        /**
-         * 2) Verkeerd event
-         */
-        if ((int) $orderline->event_id !== (int) $event->id) {
-            $scan['status']  = 'error';
-            $scan['message'] = 'Ticket hoort bij een ander evenement.';
-            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
-        }
-
-        /**
-         * 3) Geblokkeerd / al gescand
-         * Ik neem aan: blocked=true betekent "al ingecheckt".
-         * Als jij een ander veld hebt (checked_in_at), zeg het en ik pas aan.
-         */
-        if ((bool) ($orderline->blocked ?? false)) {
-            $scan['status']  = 'warning';
-            $scan['message'] = 'Ticket is geblokkeerd.';
-            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
-        }
-
-        /**
-         * 4) Al gescand
-         * Ik neem aan: blocked=true betekent "al ingecheckt".
-         * Als jij een ander veld hebt (checked_in_at), zeg het en ik pas aan.
-         */
-        if ((bool) ($orderline->scanned ?? false)) {
-            $scan['status']  = 'warning';
-            $scan['message'] = 'Ticket is al ingecheckt (al gescand).';
-            return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
-        }
-
-        /**
-         * 5) Geldig: markeer als gescand + success
-         */
-        $orderline->scanned = true;
-        // $orderline->checked_in_at = now(); // als je dit veld hebt
-        // $orderline->checked_in_by = auth()->id(); // idem
-        $orderline->save();
-
-        $scan['status']  = 'success';
-        $scan['message'] = 'Geldig ticket. Check-in geslaagd.';
 
         return $this->renderScanResult($event, $organisation, $scan, $tickets, $request);
     }
@@ -174,18 +156,119 @@ class ScanController extends Controller
     {
         if ($request->expectsJson()) {
             return response()->json([
-                'status'     => $scan['status'],
-                'message'    => $scan['message'],
-                'scan'       => $scan,
+                'status' => $scan['status'],
+                'message' => $scan['message'],
+                'feedback_ms' => (int) config('scanner.scan_feedback_ms', 1400),
+                'scan' => $scan,
             ]);
         }
 
         return view('web.scan-result', [
             'organisation' => $organisation,
             'event_uuid' => $event->uuid ?? null,
-            'event'      => $event,
-            'scan'       => $scan,
-            'tickets'    => $tickets,
+            'event' => $event,
+            'scan' => $scan,
+            'tickets' => $tickets,
+        ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function extractTicketIds(mixed $input): array
+    {
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            $input = json_last_error() === JSON_ERROR_NONE ? $decoded : [$input];
+        }
+
+        if (! is_array($input)) {
+            return [];
+        }
+
+        return collect($input)
+            ->flatten()
+            ->map(fn ($value) => filter_var($value, FILTER_VALIDATE_INT))
+            ->filter(fn ($value) => $value !== false && (int) $value > 0)
+            ->map(fn ($value) => (int) $value)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function normalizeQrValue(string $qr): string
+    {
+        $qr = trim($qr);
+
+        if ($qr === '' || ! str_contains($qr, '://')) {
+            return $qr;
+        }
+
+        $parts = parse_url($qr);
+
+        if (! empty($parts['query'])) {
+            parse_str($parts['query'], $query);
+
+            foreach (['qr', 'uuid', 'ticket', 'code'] as $key) {
+                if (! empty($query[$key]) && is_string($query[$key])) {
+                    return trim($query[$key]);
+                }
+            }
+        }
+
+        $path = trim((string) ($parts['path'] ?? ''), '/');
+
+        if ($path === '') {
+            return $qr;
+        }
+
+        $segments = explode('/', $path);
+
+        return trim((string) end($segments));
+    }
+
+    private function baseScanPayload(string $qr): array
+    {
+        return [
+            'status' => 'error',
+            'message' => 'Onbekende fout.',
+            'zone' => 'Algemeen',
+            'order_ref' => null,
+            'orderline' => [
+                'name' => null,
+                'unique_qr_id' => $qr,
+                'ticket' => [
+                    'name' => null,
+                    'price' => null,
+                ],
+            ],
+        ];
+    }
+
+
+    private function incrementScannerCount(): void
+    {
+        try {
+            auth()->user()?->increment('scan_count');
+        } catch (Throwable) {
+            // Older ticket databases may not have scan_count yet. A missing
+            // counter must never make a valid ticket scan fail.
+        }
+    }
+
+    private function scanPayloadFromOrderline(array $scan, Orderline $orderline, string $qr): array
+    {
+        return array_replace_recursive($scan, [
+            'order_ref' => $orderline->order_reference ?? null,
+            'zone' => $orderline->zone ?? 'Algemeen',
+            'orderline' => [
+                'name' => $orderline->name ?? null,
+                'unique_qr_id' => $orderline->displayQr() ?? $qr,
+                'ticket' => [
+                    'name' => $orderline->ticket?->name,
+                    'price' => $orderline->ticket?->price,
+                ],
+            ],
         ]);
     }
 }
