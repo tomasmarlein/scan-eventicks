@@ -16,7 +16,6 @@ class OverviewController extends Controller
         $organisations = Organisation::query()
             ->select(['id', 'name', 'slug'])
             ->forUser(auth()->user())
-            ->orderBy('name')
             ->get();
 
         return view('web.organisations', [

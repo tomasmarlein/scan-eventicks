@@ -17,18 +17,18 @@
                         @endif
                     </div>
                 </div>
-                <div class="col-4 text-end">
+                <div class="col-4 text-center">
                     @if(!empty($orderline['blocked']))
                         <i class="fa-light fa-circle-xmark text-danger" style="font-size: 1.5rem;"></i>
                     @elseif(!empty($orderline['scanned']))
                         <form method="POST" action="{{ $orderline['url_checkout'] ?? '#' }}" class="d-inline">
                             @csrf
-                            <button class="btn btn-white btn-sm" type="submit">Check-uit</button>
+                            <button class="btn btn-white" type="submit" style="padding: .5rem 1rem;">Check-uit</button>
                         </form>
                     @elseif(!empty($orderline['url_checkin']))
                         <form method="POST" action="{{ $orderline['url_checkin'] }}" class="d-inline">
                             @csrf
-                            <button class="btn btn-primary btn-sm" type="submit">Check-in</button>
+                            <button class="btn btn-primary" type="submit" style="padding: .5rem 1rem;">Check-in</button>
                         </form>
                     @else
                         <span class="text-muted small">Geen actie</span>

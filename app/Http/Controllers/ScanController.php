@@ -239,6 +239,7 @@ class ScanController extends Controller
                 'unique_qr_id' => $qr,
                 'ticket' => [
                     'name' => null,
+                    'type' => null,
                     'price' => null,
                 ],
             ],
@@ -266,6 +267,7 @@ class ScanController extends Controller
                 'unique_qr_id' => $orderline->displayQr() ?? $qr,
                 'ticket' => [
                     'name' => $orderline->ticket?->name,
+                    'type' => $orderline->ticket->type,
                     'price' => $orderline->ticket?->price,
                 ],
             ],

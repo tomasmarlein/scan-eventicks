@@ -7,7 +7,12 @@
             :root {
                 --rl-primary: #1A3D8E;
             }
-            html, body { height: 100%; overflow: hidden; background:#0b0b0b; }
+            html, body {
+                height: 100%;
+                overflow: hidden;
+                /*background:#0b0b0b; */
+                background: #2ecc71;
+            }
             #valid-page {
                 height: 100svh; min-height: 100svh;
                 display: flex; flex-direction: column; align-items: stretch; justify-content: space-between;
@@ -16,7 +21,9 @@
             }
             .status-badge {
                 display:inline-flex; align-items:center; gap:.5rem;
-                background: rgba(46, 204, 113,.15); color:#2ecc71; border:1px solid rgba(46, 204, 113,.35);
+                /*background: rgba(46, 204, 113,.15);*/
+                color:#f8f9fa;
+                border:1px solid #f8f9fa;
                 padding:.4rem .7rem; border-radius:999px; font-weight:600; font-size:.95rem;
                 backdrop-filter: blur(6px);
             }
@@ -32,7 +39,7 @@
             .divider { border-top:1px dashed #2d2d2d; margin:.75rem 0; }
             .cta-bar {
                 position: sticky; bottom:0; left:0; right:0;
-                display:flex; gap:.6rem; background:linear-gradient(180deg, rgba(11,11,11,0) 0%, rgba(11,11,11,1) 35%);
+                display:flex; gap:.6rem;
                 padding-top:12px; padding-bottom:4px;
             }
             .btn-primary { background: var(--rl-primary); border-color: var(--rl-primary); }
@@ -41,7 +48,7 @@
             .sparkle {
                 position:absolute; inset:0; pointer-events:none;
                 background:
-                    radial-gradient(circle, rgba(46,204,113,.9) 0 2px, transparent 3px) -20px -10px/120px 120px,
+                    radial-gradient(circle, rgba(120,255,113,.9) 0 2px, transparent 3px) -20px -10px/120px 120px,
                     radial-gradient(circle, rgba(239,121,0,.9)   0 2px, transparent 3px)  40px  10px/120px 120px,
                     radial-gradient(circle, rgba(255,255,255,.8) 0 2px, transparent 3px)  10px  30px/120px 120px;
                 animation: float 3.2s linear infinite;
@@ -54,19 +61,19 @@
         </style>
 
         <div id="valid-page">
-            <div class="position-relative">
-                <div class="sparkle"></div>
-                <div class="d-flex align-items-center justify-content-between mb-3 position-relative" style="z-index:2">
-                <span class="status-badge">
-                <i class="fa-solid fa-circle-check"></i> Geldig ticket
-            </span>
+                <div class="position-relative">
+                    <div class="sparkle"></div>
+                    <div class="d-flex align-items-center justify-content-center mt-5 mb-5 position-relative" style="z-index:2">
+                        <span class="status-badge">
+                        <i class="fa-solid fa-circle-check"></i> Geldig ticket
+                    </span>
                 </div>
 
                 <div class="ticket-card p-3 position-relative" style="z-index:2">
                     {{-- Kop --}}
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
-                            <div class="chip mb-1">{{ $event['name'] ?? 'Onbekend' }}</div>
+                            <div class="chip mb-4">{{ $event['name'] ?? 'Onbekend' }}</div>
                             <h1 class="h4 m-0">
                                 Check-in geslaagd
                             </h1>
@@ -93,7 +100,7 @@
                         </div>
                         <div class="col-6 text-end">
                             <div class="text-secondary small">Categorie</div>
-                            <div class="value">{{ $scan['orderline']['ticket']['name'] ?? 'Onbekend' }}</div>
+                            <div class="value">{{ ucfirst($scan['orderline']['ticket']['type'] ?? 'Onbekend') }}</div>
                         </div>
                     </div>
 
@@ -122,28 +129,23 @@
                     @csrf
                     <input type="hidden" name="tickets" value='@json($tickets)'>
 
-                    <button type="submit" class="btn btn-primary w-100" id="btn-next-hidden">
+                    <button type="submit" class="btn btn-light w-100" id="btn-next-hidden">
                         <i class="fa-solid fa-qrcode me-2"></i>Volgende scan
                     </button>
                 </form>
             </div>
         </div>
-
-{{--        <script>--}}
-{{--            // Trillen bij success (als beschikbaar)--}}
-{{--            if (navigator.vibrate) { navigator.vibrate([40, 30, 40]); }--}}
-
-{{--            // // Automatisch na 5 seconden het form submitten--}}
-{{--            setTimeout(() => {--}}
-{{--                document.getElementById('resultForm')?.submit();--}}
-{{--            }, 5000);--}}
-{{--        </script>--}}
     @else
         <style>
             :root {
-                --rl-primary: #EF7900;
+                --rl-primary: #1A3D8E;
             }
-            html, body { height: 100%; overflow: hidden; background:#0b0b0b; }
+            html, body {
+                height: 100%;
+                overflow: hidden;
+                /*background:#0b0b0b; */
+                background:#e74c3c;
+            }
             #invalid-page {
                 height: 100svh; min-height: 100svh;
                 display: flex; flex-direction: column; align-items: stretch; justify-content: space-between;
@@ -152,7 +154,8 @@
             }
             .status-badge {
                 display:inline-flex; align-items:center; gap:.5rem;
-                background: rgba(231, 76, 60,.15); color:#e74c3c; border:1px solid rgba(231,76,60,.35);
+                color: #f8f9fa;
+                border:1px solid #f8f9fa;
                 padding:.4rem .7rem; border-radius:999px; font-weight:600; font-size:.95rem;
                 backdrop-filter: blur(6px);
             }
@@ -168,7 +171,8 @@
             .divider { border-top:1px dashed #2d2d2d; margin:.75rem 0; }
             .cta-bar {
                 position: sticky; bottom:0; left:0; right:0;
-                display:flex; gap:.6rem; background:linear-gradient(180deg, rgba(11,11,11,0) 0%, rgba(11,11,11,1) 35%);
+                display:flex; gap:.6rem;
+                /*background:linear-gradient(180deg, rgba(11,11,11,0) 0%, rgba(11,11,11,1) 35%);*/
                 padding-top:12px; padding-bottom:4px;
             }
             .btn-danger { background: #e74c3c; border-color: #e74c3c; }
@@ -177,17 +181,17 @@
 
         <div id="invalid-page">
             <div class="position-relative">
-                <div class="d-flex align-items-center justify-content-between mb-3 position-relative" style="z-index:2">
-        <span class="status-badge">
-            <i class="fa-solid fa-circle-xmark"></i> Ongeldig ticket
-        </span>
+                <div class="d-flex align-items-center justify-content-center mt-5 mb-5 position-relative" style="z-index:2">
+                    <span class="status-badge">
+                        <i class="fa-solid fa-circle-xmark"></i> Ongeldig ticket
+                    </span>
                 </div>
 
                 <div class="ticket-card p-3 position-relative" style="z-index:2">
                     {{-- Kop --}}
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
-                            <div class="chip mb-1">{{ $event['name'] ?? 'Onbekend' }}</div>
+                            <div class="chip mb-4">{{ $event['name'] ?? 'Onbekend' }}</div>
                             <h1 class="h4 m-0">Check-in mislukt</h1>
                             <div class="text-secondary small">
                                 {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }} • Scanner #{{ auth()->id() }}
@@ -212,7 +216,7 @@
                         </div>
                         <div class="col-6 text-end">
                             <div class="text-secondary small">Categorie</div>
-                            <div class="value">{{ $scan['orderline']['ticket']['name'] ?? 'Onbekend' }}</div>
+                            <div class="value">{{ ucfirst($scan['orderline']['ticket']['type'] ?? 'Onbekend') }}</div>
                         </div>
                     </div>
 
@@ -241,22 +245,12 @@
                     @csrf
                     <input type="hidden" name="tickets" value='@json($tickets)'>
 
-                    <button type="submit" class="btn btn-danger w-100" id="btn-next-hidden">
+                    <button type="submit" class="btn btn-dark w-100" id="btn-next-hidden">
                         <i class="fa-solid fa-qrcode me-2"></i>Nieuwe scan
                     </button>
                 </form>
             </div>
         </div>
-
-{{--        <script>--}}
-{{--            // Trillen bij fout (heftiger)--}}
-{{--            if (navigator.vibrate) { navigator.vibrate([80, 50, 80]); }--}}
-
-{{--            // Automatisch na 5 seconden terug naar camera--}}
-{{--            setTimeout(() => {--}}
-{{--                document.getElementById('resultForm')?.submit();--}}
-{{--            }, 5000);--}}
-{{--        </script>--}}
     @endif
 @endsection
 
@@ -288,7 +282,7 @@
             // ⏱ Automatisch na 5 s opnieuw naar de camera
             setTimeout(() => {
                 document.getElementById('resultForm')?.submit();
-            }, 5000);
+            }, 3000);
 
             // 🧹 Reset vlag zodat volgende scan opnieuw geluid geeft
             try { sessionStorage.removeItem('hapticDone'); } catch (e) {}
