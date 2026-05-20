@@ -2,58 +2,65 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Event;
+use App\Http\Controllers\Concerns\ResolvesScannerContext;
+use App\Models\Orderline;
 use App\Models\Organisation;
-use App\Services\ApiService;
-use Illuminate\Http\Request;
+use App\Models\Ticket;
 
 class OverviewController extends Controller
 {
-    protected $apiService;
-
-    public function __construct(ApiService $apiService)
-    {
-        $this->apiService = $apiService;
-    }
+    use ResolvesScannerContext;
 
     public function index()
     {
-        $organisations = [];
-
-        $userId = auth()->user()->id;
-
-        if (auth()->user()->hasRole('admin')) {
-            $organisations = Organisation::with('users')->get();
-        } else {
-            $organisations = Organisation::with('users')
-                                         ->whereHas('users', function ($query) use ($userId) {
-                                             $query->where('user_id', $userId);
-                                         })->get();
-        }
+        $organisations = Organisation::query()
+            ->select(['id', 'name', 'slug'])
+            ->forUser(auth()->user())
+            ->get();
 
         return view('web.organisations', [
             'organisations' => $organisations,
         ]);
     }
 
-    public function event($org_slug, $slug)
+    public function event(string $org_slug, string $slug)
     {
-        /// get organisation by slug
-        $organisation = Organisation::where('slug', $org_slug)->first();
+        $organisation = $this->resolveOrganisation($org_slug);
 
-        if (!$organisation) {
-            abort(404);
-        }
+        $event = $this->resolveEventForOrganisation(
+            $organisation,
+            $slug,
+            ['tickets'],
+            ['id', 'uuid', 'organisation_id', 'name', 'slug', 'address', 'postcode', 'plaats', 'start'],
+        );
 
-        $event = Event::with('tickets.orderlines')->where('slug', $slug)->first();
+        $ticketIds = $event->tickets->pluck('id')->map(fn ($id) => (int) $id)->values();
 
-        if (!$event) {
-            abort(404);
-        }
+        $scannedByTicket = $ticketIds->isEmpty()
+            ? collect()
+            : Orderline::query()
+                ->forEvent((int) $event->id)
+                ->whereIn('ticket_id', $ticketIds)
+                ->where('scanned', true)
+                ->selectRaw('ticket_id, COUNT(*) as aggregate')
+                ->groupBy('ticket_id')
+                ->pluck('aggregate', 'ticket_id');
+
+        $event->tickets->each(function (Ticket $ticket) use ($scannedByTicket) {
+            $ticket->setAttribute('sold_tickets', (int) ($ticket->verkochte_tickets ?? 0));
+            $ticket->setAttribute('scanned_tickets', (int) ($scannedByTicket[$ticket->id] ?? 0));
+        });
+
+        $soldTickets = (int) $event->tickets->sum('sold_tickets');
+        $scannedTickets = (int) $event->tickets->sum('scanned_tickets');
+
+        $event->setAttribute('sold_tickets', $soldTickets);
+        $event->setAttribute('scanned_tickets', $scannedTickets);
+        $event->setAttribute('to_scan_tickets', max(0, $soldTickets - $scannedTickets));
 
         return view('web.event', [
             'organisation' => $organisation,
-            'event'        => $event,
+            'event' => $event,
         ]);
     }
 }

@@ -2,30 +2,39 @@
 
 namespace App\Models;
 
-use Cocur\Slugify\Slugify;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Event;
-use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Organisation extends Model
 {
-    use HasFactory, softDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $connection = 'tickets_mysql';
 
-    public function users()
+    public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'organisation_users', 'organisation_id', 'user_id');
     }
 
-    public function events()
+    public function events(): HasMany
     {
         return $this->hasMany(Event::class);
     }
 
-    public function findBySlug($slug)
+    public function scopeForUser(Builder $query, User $user): Builder
+    {
+        if ($user->isScannerAdmin()) {
+            return $query;
+        }
+
+        return $query->whereHas('users', fn (Builder $userQuery) => $userQuery->where('users.id', $user->id));
+    }
+
+    public function findBySlug($slug): ?self
     {
         return $this->where('slug', $slug)->first();
     }
@@ -35,7 +44,7 @@ class Organisation extends Model
         return $this->with('users')->paginate(14);
     }
 
-    public function getOrganisation($id)
+    public function getOrganisation($id): ?self
     {
         return $this->with('users')->find($id);
     }

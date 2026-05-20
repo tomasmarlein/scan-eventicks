@@ -2,107 +2,106 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ApiService
 {
-    protected $baseUri;
+    public function __construct(
+        private readonly ?string $baseUri = null,
+    ) {}
 
-    public function __construct()
+    public function getEventByUuid(string $uuid): array
     {
-        $this->baseUri = config('services.api.base_uri');
-    }
-    // Pers
-    public function getEventByUuid($uuid)
-    {
-        $response = Http::get("{$this->baseUri}/get-event/{$uuid}");
-
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        return ['error' => 'Unable to fetch data from API'];
+        return $this->get("get-event/{$uuid}");
     }
 
-    public function getEventsByOrganisationId(int $organisationId)
+    public function getEventsByOrganisationId(int $organisationId): array
     {
-        $response = Http::get("{$this->baseUri}/get-events/{$organisationId}");
-
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        return ['error' => 'Unable to fetch data from API'];
+        return $this->get("get-events/{$organisationId}");
     }
 
-    public function getOrderlinesByEvent($eventId)
+    public function getOrderlinesByEvent(int $eventId): array
     {
-        $response = Http::get("{$this->baseUri}/get-orderlines/{$eventId}");
-
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        return ['error' => 'Unable to fetch data from API'];
+        return $this->get("get-orderlines/{$eventId}");
     }
 
-    // In ApiService.php
-    public function searchOrderlinesByEvent($eventId, string $q)
+    public function searchOrderlinesByEvent(int $eventId, string $q): ?array
     {
-        if (empty($q)) {
-            // Geen zoekterm → geef alles terug
+        if (trim($q) === '') {
             return $this->getOrderlinesByEvent($eventId);
         }
 
-        try {
-            $response = Http::withToken($this->token)
-                            ->get($this->baseUrl . "/search-orderlines/{$eventId}", [
-                                'q' => $q,
-                            ]);
-
-            if ($response->successful()) {
-                return $response->json('data'); // afhankelijk van API-structuur
-            }
-        } catch (\Throwable $e) {
-            \Log::error("API search failed: " . $e->getMessage());
-        }
-
-        return null; // null → fallback in je controller
+        return $this->get("search-orderlines/{$eventId}", ['q' => $q])['data'] ?? null;
     }
 
-    public function checkinOrderline($orderline_uuid)
+    public function checkinOrderline(string $orderlineUuid): array
     {
-        $response = Http::post("{$this->baseUri}/manual/scan/checkin/{$orderline_uuid}");
-
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        return ['error' => 'Unable to fetch data from API'];
+        return $this->post("manual/scan/checkin/{$orderlineUuid}");
     }
 
-    public function checkoutOrderline($uuid)
+    public function checkoutOrderline(string $uuid): array
     {
-        $response = Http::get("{$this->baseUri}/scan/checkout/{$uuid}");
-
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        return ['error' => 'Unable to fetch data from API'];
+        return $this->post("scan/checkout/{$uuid}");
     }
 
-    public function scanTicket($event_uuid, $qr, array $ticketIds)
+    /**
+     * @param  list<int>  $ticketIds
+     */
+    public function scanTicket(string $eventUuid, string $qr, array $ticketIds): array
     {
-        $response = Http::post("{$this->baseUri}/scan/checkin/{$event_uuid}", [
+        return $this->post("scan/checkin/{$eventUuid}", [
             'qr' => $qr,
             'tickets' => $ticketIds,
         ]);
+    }
 
-        if ($response->successful()) {
-            return $response->json();
+    private function get(string $path, array $query = []): array
+    {
+        try {
+            $response = $this->client()->get($this->url($path), $query);
+
+            return $response->successful()
+                ? $response->json() ?? []
+                : ['error' => 'Unable to fetch data from API', 'status' => $response->status()];
+        } catch (\Throwable $exception) {
+            Log::warning('Eventicks API GET failed', ['path' => $path, 'message' => $exception->getMessage()]);
+
+            return ['error' => 'Unable to fetch data from API'];
         }
+    }
 
-        return ['error' => 'Unable to fetch data from API'];
+    private function post(string $path, array $payload = []): array
+    {
+        try {
+            $response = $this->client()->post($this->url($path), $payload);
+
+            return $response->successful()
+                ? $response->json() ?? []
+                : ['error' => 'Unable to update API', 'status' => $response->status()];
+        } catch (\Throwable $exception) {
+            Log::warning('Eventicks API POST failed', ['path' => $path, 'message' => $exception->getMessage()]);
+
+            return ['error' => 'Unable to update API'];
+        }
+    }
+
+    private function client(): PendingRequest
+    {
+        $request = Http::acceptJson()
+            ->timeout((int) config('services.api.timeout', 8))
+            ->retry(2, 200, throw: false);
+
+        $token = config('services.api.token');
+
+        return $token ? $request->withToken($token) : $request;
+    }
+
+    private function url(string $path): string
+    {
+        $baseUri = rtrim($this->baseUri ?: (string) config('services.api.base_uri'), '/');
+
+        return $baseUri.'/'.ltrim($path, '/');
     }
 }

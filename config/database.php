@@ -63,11 +63,22 @@ return [
         ],
 
         'tickets_mysql' => [
-            'driver' => 'mysql',
-            'host' => env('DB_TICKETS_HOST'),
-            'database' => env('DB_TICKETS_DATABASE'),
-            'username' => env('DB_TICKETS_USERNAME'),
-            'password' => env('DB_TICKETS_PASSWORD'),
+            'driver' => env('DB_TICKETS_CONNECTION', 'mysql'),
+            'host' => env('DB_TICKETS_HOST', '127.0.0.1'),
+            'port' => env('DB_TICKETS_PORT', '3306'),
+            'database' => env('DB_TICKETS_DATABASE', 'laravel'),
+            'username' => env('DB_TICKETS_USERNAME', 'root'),
+            'password' => env('DB_TICKETS_PASSWORD', ''),
+            'unix_socket' => env('DB_TICKETS_SOCKET', ''),
+            'charset' => env('DB_TICKETS_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_TICKETS_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('DB_TICKETS_SSL_CA'),
+            ]) : [],
         ],
 
         'mariadb' => [

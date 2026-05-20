@@ -3,30 +3,24 @@
 namespace App\Listeners;
 
 use Illuminate\Auth\Events\Login;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class UserLoggedIn
 {
     /**
-     * Create the event listener.
-     */
-    public function __construct()
-    {
-        //
-    }
-
-    /**
-     * Handle the event.
+     * @throws ValidationException
      */
     public function handle(Login $event): void
     {
         $user = $event->user;
 
-        if (!$user->active) {
+        if (! (bool) ($user->active ?? false)) {
             Auth::logout();
-            redirect('/login');
+
+            throw ValidationException::withMessages([
+                'email' => 'Je account is niet actief.',
+            ]);
         }
     }
 }

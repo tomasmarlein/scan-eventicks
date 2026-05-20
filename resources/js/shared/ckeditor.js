@@ -1,29 +1,6 @@
 import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
 import '../../css/ckeditor.css';
 
-// document.addEventListener('DOMContentLoaded', () => {
-//     document.querySelectorAll('.ckeditor').forEach(editorElement => {
-//         ClassicEditor.create(editorElement,
-//             {
-//                 contentsCss: '/build/assets/ckeditor.css',
-//                 simpleUpload: {
-//                     uploadUrl: "/ckeditor/upload",
-//                     headers: {
-//                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-//                     }
-//                 }
-//             }
-//         )
-//             .then(editorElement => {
-//                 console.log('Editor initialized for:', editorElement);
-//             })
-//             .catch(error => {
-//                 console.error('Fout:', error);
-//             });
-//     });
-// });
-
-
 class MyUploadAdapter {
     constructor(loader) {
         this.loader = loader;
@@ -67,9 +44,7 @@ document.querySelectorAll('.ckeditor').forEach(editorElement => {
             allowCollaborationFeatures: true
         }
     })
-        .then(editor => {
-            console.log("Editor initialized for:", editorElement);
-        })
+        .then(() => {})
         .catch(error => {
             console.error("Fout bij het laden van CKEditor:", error);
         });

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrganisationUser extends Model
 {
@@ -13,13 +14,15 @@ class OrganisationUser extends Model
 
     public $timestamps = false;
 
-    public function user()
+    protected $guarded = [];
+
+    public function user(): BelongsTo
     {
-        return $this->hasOne(User::class, 'user_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function organisation()
+    public function organisation(): BelongsTo
     {
-        return $this->hasOne(Organisation::class, 'organisation_id');
+        return $this->belongsTo(Organisation::class, 'organisation_id');
     }
 }

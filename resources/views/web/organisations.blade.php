@@ -5,7 +5,7 @@
         <div class="container">
             <div class="row">
                 <div class="col-lg-8">
-                    <h3 class="text-primary">{{ env('APP_NAME') }}</h3>
+                    <h3 class="text-primary">{{ config('app.name') }}</h3>
                     <div class="ck-text text-muted">
                         Selecteer een organisatie om verder te kunnen gaan
                     </div>
