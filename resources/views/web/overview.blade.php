@@ -1,64 +1,59 @@
 @extends('template.template')
 
 @section('main')
-    <header class="section">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-8">
-                    <h3 class="text-primary">{{ $organisation->name }}</h3>
-                    <div class="ck-text text-muted">
-                        Selecteer een evenement om tickets te beheren
-                    </div>
-                </div>
+    @include('web.partials.page-header', [
+        'backUrl' => route('dashboard'),
+        'backLabel' => 'Organisaties',
+        'eyebrow' => 'ORGANISATIE',
+        'title' => $organisation->name,
+        'description' => 'Kies een evenement om de toegang te beheren.',
+        'flat' => true,
+    ])
+
+    <main class="app-main app-main--flat">
+        <div class="container app-shell">
+            <div class="page-section-heading">
+                <div><span class="section-kicker">EVENEMENTEN</span><h2>Overzicht</h2></div>
+                <span class="count-pill">{{ $events->count() }} {{ $events->count() === 1 ? 'evenement' : 'evenementen' }}</span>
             </div>
-        </div>
-    </header>
-    <section class="section pt-0">
-        <div class="container">
-            <div class="row g-4">
+
+            <div class="event-list">
                 @forelse($events as $event)
                     @php
                         $soldTickets = (int) ($event->sold_tickets ?? 0);
                         $scannedTickets = (int) ($event->scanned_tickets ?? 0);
-                        $percent = (float) ($event->scan_percentage ?? 0);
+                        $percent = min(100, max(0, (float) ($event->scan_percentage ?? 0)));
                     @endphp
-                    <div class="col-12">
-                        <div class="event-card card p-4 bg-white border-radius-lg border-1">
-                            <h6 class="mb-3">{{ $event->name }}</h6>
-                            <div class="event_date text-muted mb-2">
-                                <i class="fa-light fa-calendar-days me-2"></i>
-                                {{ $event->start ? \Carbon\Carbon::parse($event->start)->translatedFormat('d F Y') : 'Datum onbekend' }}
+                    <a href="{{ route('event.overview', [$organisation->slug, $event->slug]) }}" class="event-overview-card">
+                        <div class="event-overview-card__top">
+                            <div>
+                                <span class="section-kicker">EVENEMENT</span>
+                                <h3>{{ $event->name }}</h3>
                             </div>
-                            <div class="event_location text-muted mb-2">
-                                <i class="fa-light fa-location-dot me-2"></i>
-                                {{ $event->address }}, {{ $event->postcode }} {{ $event->plaats }}
-                            </div>
-                            <div class="event_tickets text-muted mb-5 d-flex flex-column gap-1">
-                                <div class="mb-3">
-                                    <i class="fa-light fa-ticket me-2"></i>
-                                    {{ $scannedTickets }} / {{ $soldTickets }} tickets gescand
-                                </div>
-                                <div>
-                                    <div class="progress" role="progressbar" aria-valuenow="{{ $percent }}" aria-valuemin="0" aria-valuemax="100">
-                                        <div class="progress-bar bg-primary" style="width: {{ min(100, max(0, $percent)) }}%;"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="btn-wrapper">
-                                <a href="{{ route('event.overview', [$organisation->slug, $event->slug]) }}" class="btn btn-primary">
-                                    Bekijk tickets
-                                </a>
-                            </div>
+                            <span class="event-overview-card__arrow"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
                         </div>
-                    </div>
+                        <div class="event-overview-card__details">
+                            <span><i class="fa-regular fa-calendar" aria-hidden="true"></i> {{ $event->start ? \Carbon\Carbon::parse($event->start)->translatedFormat('d F Y') : 'Datum onbekend' }}</span>
+                            @if($event->address || $event->plaats)
+                                <span><i class="fa-solid fa-location-dot" aria-hidden="true"></i> {{ collect([$event->address, trim(($event->postcode ?? '').' '.($event->plaats ?? ''))])->filter()->implode(', ') }}</span>
+                            @endif
+                        </div>
+                        <div class="event-overview-card__progress">
+                            <div><strong>{{ $scannedTickets }} / {{ $soldTickets }}</strong><span>tickets gescand</span></div>
+                            <span>{{ number_format($percent, 0) }}%</span>
+                        </div>
+                        <div class="progress" role="progressbar" aria-label="Gescande tickets voor {{ $event->name }}" aria-valuenow="{{ $percent }}" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar" style="width: {{ $percent }}%"></div>
+                        </div>
+                    </a>
                 @empty
-                    <div class="col-12">
-                        <div class="card p-4 bg-white border-radius-lg border-1 text-center text-muted">
-                            Geen evenementen gevonden.
-                        </div>
+                    <div class="surface-card empty-state">
+                        <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                        <h2>Geen evenementen gevonden</h2>
+                        <p>Er zijn nog geen evenementen gekoppeld aan deze organisatie.</p>
                     </div>
                 @endforelse
             </div>
         </div>
-    </section>
+    </main>
 @endsection

@@ -5,98 +5,71 @@
         $soldTickets = (int) ($event->sold_tickets ?? 0);
         $scannedTickets = (int) ($event->scanned_tickets ?? 0);
         $toScan = (int) ($event->to_scan_tickets ?? max(0, $soldTickets - $scannedTickets));
+        $scanPercent = $soldTickets > 0 ? min(100, round($scannedTickets / $soldTickets * 100)) : 0;
     @endphp
 
-    <header class="section bg-primary text-white">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-8">
-                    <div class="mb-5">
-                        <a href="{{ route('dashboard') }}" class="text-white text-decoration-none"><i class="fa-solid fa-arrow-left-long me-2 text-white"></i> Terug</a>
-                    </div>
-                    <h5 class="text-white">{{ $event->name }}</h5>
-                    <div class="ck-text">
-                        {{ $event->address }}, {{ $event->postcode }} {{ $event->plaats }}
-                    </div>
+    @include('web.partials.page-header', [
+        'backUrl' => route('organisation.overview', $organisation->slug),
+        'backLabel' => 'Evenementen',
+        'eyebrow' => $organisation->name,
+        'title' => $event->name,
+        'description' => collect([$event->address, trim(($event->postcode ?? '').' '.($event->plaats ?? ''))])->filter()->implode(', '),
+    ])
+
+    <main class="app-main">
+        <div class="container app-shell">
+            <section class="surface-card quick-start" aria-labelledby="quickStartTitle">
+                <div class="quick-start__icon"><i class="fa-solid fa-qrcode" aria-hidden="true"></i></div>
+                <div class="quick-start__body">
+                    <span class="section-kicker">TOEGANGSCONTROLE</span>
+                    <h2 id="quickStartTitle">Klaar om te scannen?</h2>
+                    <p>Kies eerst welke tickettypes je wilt scannen.</p>
                 </div>
+                @if($event->tickets->isNotEmpty())
+                    <a href="{{ route('scan.tickets', [$organisation->slug, $event->slug]) }}" class="app-button app-button--primary">
+                        <i class="fa-solid fa-camera" aria-hidden="true"></i> Start scanner
+                    </a>
+                @else
+                    <span class="text-muted">Geen tickettypes beschikbaar</span>
+                @endif
+            </section>
+
+            <div class="page-section-heading app-section-space">
+                <div><span class="section-kicker">LIVE OVERZICHT</span><h2>Ticketstatus</h2></div>
+            </div>
+            <section class="metric-grid" aria-label="Ticketstatus">
+                <div class="metric-card"><span>Gescand</span><strong>{{ $scannedTickets }}</strong><small>toegelaten bezoekers</small></div>
+                <div class="metric-card"><span>Openstaand</span><strong>{{ $toScan }}</strong><small>nog te scannen</small></div>
+            </section>
+
+            <section class="surface-card ticket-breakdown" aria-labelledby="ticketBreakdownTitle">
+                <div class="ticket-breakdown__heading">
+                    <div><span class="section-kicker">VOORTGANG</span><h2 id="ticketBreakdownTitle">Per tickettype</h2></div>
+                    <strong>{{ $scanPercent }}%</strong>
+                </div>
+                <div class="progress" role="progressbar" aria-label="Totale voortgang" aria-valuenow="{{ $scanPercent }}" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: {{ $scanPercent }}%"></div>
+                </div>
+                <div class="ticket-breakdown__rows">
+                    @forelse($event->tickets as $ticket)
+                        @php
+                            $sold = (int) ($ticket->sold_tickets ?? $ticket->verkochte_tickets ?? 0);
+                            $scanned = (int) ($ticket->scanned_tickets ?? 0);
+                        @endphp
+                        <div class="ticket-breakdown__row">
+                            <span>{{ $ticket->name }}</span>
+                            <strong>{{ $scanned }} <span>/ {{ $sold }}</span></strong>
+                        </div>
+                    @empty
+                        <p class="text-muted mb-0">Geen tickettypes gevonden.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <div class="secondary-actions">
+                <a href="{{ route('scan.tickets', [$organisation->slug, $event->slug]) }}" class="app-button app-button--secondary"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Tickettypes kiezen</a>
+                <a href="{{ route('scan.manuel', [$organisation->slug, $event->slug]) }}" class="app-button app-button--secondary"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Ticket handmatig opzoeken</a>
             </div>
         </div>
-    </header>
-    <section class="section">
-        <div class="container">
-            <div class="row g-4">
-                <div class="col-12">
-                    <div class="card bg-white border-1 border-radius-md p-4">
-                        <div class="row g-4">
-                            <div class="col-12">
-                                <h5>Overzicht tickets</h5>
-                            </div>
-                            <div class="col-6">
-                                <div class="card text-center p-4">
-                                    <h1 class="text-primary">{{ $scannedTickets }}</h1>
-                                    <div class="ck-text text-muted">
-                                        Gescande tickets
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="card text-center p-4">
-                                    <h1>{{ $toScan }}</h1>
-                                    <div class="ck-text text-muted">
-                                        Nog te scannen
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12">
-                    <div class="card bg-white border-1 border-radius-md p-4">
-                        <div class="row g-4">
-                            <div class="col-12">
-                                <h5>Per ticket type</h5>
-                            </div>
-                            @foreach($event->tickets as $ticket)
-                                @php
-                                    $sold = (int) ($ticket->sold_tickets ?? $ticket->verkochte_tickets ?? 0);
-                                    $scanned = (int) ($ticket->scanned_tickets ?? 0);
-                                @endphp
-                                <div class="col-12">
-                                    <div class="card bg-light border-0 border-radius-md p-3">
-                                        <div class="row g-4 align-items-center">
-                                            <div class="col-12">
-                                                <span class="badge badge-name">
-                                                    {{ $ticket->name }}
-                                                </span>
-                                            </div>
-                                            <div class="col-6">
-                                                {{ $sold }} tickets
-                                            </div>
-                                            <div class="col-6 text-muted text-end">
-                                                {{ $scanned }} gescand
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12">
-                    <div class="btn-wrapper">
-                        <a href="{{ route('scan.tickets', [$organisation->slug, $event->slug]) }}" class="btn btn-primary">
-                            <i class="fa-light fa-qrcode-read me-3"></i>
-                            Start scanner
-                        </a>
-                        <a href="{{ route('scan.manuel', [$organisation->slug, $event->slug]) }}" class="btn btn-white">
-                            <i class="fa-light fa-list-check me-3"></i>
-                            Bekijk ticketlijst
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
+    </main>
 @endsection
