@@ -1,11 +1,10 @@
 import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const video    = document.getElementById("preview");
-const select   = document.getElementById("cameraSelect");
-const startBtn = document.getElementById("startBtn");
-const stopBtn  = document.getElementById("stopBtn");
 const torchBtn = document.getElementById("torchBtn");
+const soundBtn = document.getElementById("soundBtn");
 const statusEl = document.getElementById("status");
+const retryBtn = document.getElementById("retryBtn");
 const qrField  = document.getElementById("qrField");
 const form     = document.getElementById("resultForm");
 const page     = document.getElementById("page-scan");
@@ -16,9 +15,12 @@ const feedbackMessage = document.getElementById("scanFeedbackMessage");
 const feedbackName = document.getElementById("scanFeedbackName");
 const feedbackTicket = document.getElementById("scanFeedbackTicket");
 const feedbackOrder = document.getElementById("scanFeedbackOrder");
+const feedbackSymbol = document.getElementById("scanFeedbackSymbol");
 
 const feedbackMs = Number.parseInt(page?.dataset?.feedbackMs || "1400", 10);
 const recentScanTtlMs = Math.max(feedbackMs + 1200, 3500);
+const soundFiles = { success: "/sounds/success.mp3", error: "/sounds/error.mp3" };
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
 let reader = null;
 let controls = null;
@@ -28,16 +30,120 @@ let torchOn = false;
 let submitting = false;
 let feedbackTimer = null;
 let resumeTimer = null;
+let restartTimer = null;
+let lifecycleId = 0;
+let isStarting = false;
+let restartWhenReady = false;
+let audioContext = null;
+let soundLoadPromise = null;
+let soundMuted = false;
 const recentScans = new Map();
 
 if (!video || !form || !qrField) {
     throw new Error("Scanner markup ontbreekt op deze pagina.");
 }
 
-function setStatus(message) {
+function getAudioContext() {
+    if (!AudioContextClass) return null;
+
+    if (!audioContext) {
+        try {
+            audioContext = new AudioContextClass();
+            audioContext.addEventListener("statechange", updateSoundButton);
+        } catch {
+            return null;
+        }
+    }
+
+    return audioContext;
+}
+
+function updateSoundButton() {
+    if (!soundBtn) return;
+
+    const active = !soundMuted && audioContext?.state === "running";
+    const label = active ? "Geluid uitschakelen" : "Geluid inschakelen";
+    soundBtn.classList.toggle("is-active", active);
+    soundBtn.setAttribute("aria-pressed", String(active));
+    soundBtn.setAttribute("aria-label", label);
+    soundBtn.title = label;
+}
+
+function loadSounds() {
+    const context = getAudioContext();
+    if (!context) return Promise.resolve(null);
+
+    if (!soundLoadPromise) {
+        soundLoadPromise = Promise.all(Object.entries(soundFiles).map(async ([status, url]) => {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Geluid ${status} kon niet geladen worden.`);
+            return [status, await context.decodeAudioData(await response.arrayBuffer())];
+        })).then(entries => Object.fromEntries(entries)).catch(error => {
+            soundLoadPromise = null;
+            throw error;
+        });
+    }
+
+    return soundLoadPromise;
+}
+
+async function enableSound() {
+    if (soundMuted) return;
+
+    const context = getAudioContext();
+    if (!context) return;
+
+    try {
+        await context.resume();
+        await loadSounds();
+    } catch (error) {
+        console.warn("Scangeluid kon niet worden ingeschakeld:", error);
+    }
+
+    updateSoundButton();
+}
+
+async function playSound(status) {
+    if (soundMuted) return;
+
+    const key = status === "success" ? "success" : "error";
+    const context = getAudioContext();
+
+    if (context?.state === "running") {
+        try {
+            const buffers = await loadSounds();
+            const source = context.createBufferSource();
+            const volume = context.createGain();
+            source.buffer = buffers[key];
+            volume.gain.value = 0.8;
+            source.connect(volume);
+            volume.connect(context.destination);
+            source.start();
+            return;
+        } catch (error) {
+            console.warn("Scangeluid kon niet worden afgespeeld:", error);
+        }
+    }
+
+    try {
+        const audio = new Audio(soundFiles[key]);
+        audio.volume = 0.8;
+        await audio.play();
+    } catch {
+        updateSoundButton();
+    }
+}
+
+function setStatus(message, state) {
     if (statusEl) {
         statusEl.textContent = message;
     }
+
+    if (state && page) {
+        page.dataset.state = state;
+    }
+
+    retryBtn?.classList.toggle("d-none", state !== "error" || page?.dataset.cameraActive === "true");
 }
 
 function pruneRecentScans(now = Date.now()) {
@@ -67,6 +173,9 @@ function clearState() {
 
     if (torchBtn) {
         torchBtn.disabled = true;
+        torchBtn.classList.remove("is-active");
+        torchBtn.setAttribute("aria-pressed", "false");
+        torchBtn.setAttribute("aria-label", "Zaklamp inschakelen");
     }
 }
 
@@ -79,6 +188,8 @@ function setTorchButtonState(track) {
         const caps = track?.getCapabilities?.();
         torchBtn.disabled = !caps?.torch;
         torchBtn.classList.toggle("is-active", torchOn);
+        torchBtn.setAttribute("aria-pressed", String(torchOn));
+        torchBtn.setAttribute("aria-label", torchOn ? "Zaklamp uitschakelen" : "Zaklamp inschakelen");
     } catch {
         torchBtn.disabled = true;
     }
@@ -101,39 +212,7 @@ async function applyTorch(on) {
     }
 }
 
-async function listCameras() {
-    if (!select || !navigator.mediaDevices?.enumerateDevices) {
-        return;
-    }
-
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videos = devices.filter(device => device.kind === "videoinput");
-    const selectedDevice = select.value;
-
-    select.innerHTML = "";
-
-    videos.forEach((device, index) => {
-        const option = document.createElement("option");
-        option.value = device.deviceId || "";
-        option.textContent = device.label || `Camera ${index + 1}`;
-        select.appendChild(option);
-    });
-
-    if ([...select.options].some(option => option.value === selectedDevice)) {
-        select.value = selectedDevice;
-        return;
-    }
-
-    const preferred = [...select.options].find(option => /back|rear|environment/i.test(option.textContent));
-
-    if (preferred) {
-        select.value = preferred.value;
-    }
-}
-
 function stopDecoderAndStream() {
-    window.clearTimeout(resumeTimer);
-
     try {
         controls?.stop?.();
     } catch (error) {
@@ -159,24 +238,44 @@ function stopDecoderAndStream() {
 }
 
 function stop() {
+    lifecycleId += 1;
+    restartWhenReady = false;
+    window.clearTimeout(restartTimer);
     stopDecoderAndStream();
+    if (page) page.dataset.cameraActive = "false";
+    setStatus("Camera hervat automatisch wanneer je terugkeert.", "starting");
+}
 
-    if (startBtn) {
-        startBtn.disabled = false;
+function scheduleRestart() {
+    window.clearTimeout(restartTimer);
+    if (!document.hidden) {
+        restartTimer = window.setTimeout(() => void start(), 3000);
     }
+}
 
-    if (stopBtn) {
-        stopBtn.disabled = true;
+function finishInterruptedStart() {
+    isStarting = false;
+    if (restartWhenReady && !document.hidden) {
+        restartWhenReady = false;
+        void start();
     }
-
-    setStatus("Status: gestopt.");
 }
 
 async function start() {
+    if (document.hidden) return;
+    if (isStarting) {
+        restartWhenReady = true;
+        return;
+    }
+
+    const attempt = ++lifecycleId;
+    isStarting = true;
+    window.clearTimeout(restartTimer);
     stopDecoderAndStream();
+    if (page) page.dataset.cameraActive = "false";
 
     if (!navigator.mediaDevices?.getUserMedia) {
-        setStatus("Camera wordt niet ondersteund door deze browser.");
+        setStatus("Deze browser ondersteunt geen cameratoegang.", "error");
         return;
     }
 
@@ -188,11 +287,13 @@ async function start() {
         reader = new BrowserMultiFormatReader();
     }
 
-    const deviceId = select?.value || undefined;
-    setStatus("Status: camera starten...");
+    setStatus("Camera starten…", "starting");
 
     try {
-        controls = await reader.decodeFromVideoDevice(deviceId, video, (result, error) => {
+        const nextControls = await reader.decodeFromConstraints({
+            audio: false,
+            video: { facingMode: { ideal: "environment" } },
+        }, video, (result, error) => {
             if (result) {
                 void handleScanResult(result.getText());
             }
@@ -202,25 +303,42 @@ async function start() {
             }
         });
 
+        if (attempt !== lifecycleId || document.hidden) {
+            nextControls.stop();
+            finishInterruptedStart();
+            return;
+        }
+
+        controls = nextControls;
+
         currentStream = video.srcObject;
         currentVideoTrack = currentStream?.getVideoTracks?.()[0] || null;
 
         await video.play().catch(() => {});
-        await listCameras();
+        if (attempt !== lifecycleId || document.hidden) {
+            finishInterruptedStart();
+            return;
+        }
+        isStarting = false;
 
         torchOn = false;
         setTorchButtonState(currentVideoTrack);
 
-        if (startBtn) {
-            startBtn.disabled = true;
-        }
-
-        if (stopBtn) {
-            stopBtn.disabled = false;
-        }
-
-        setStatus("Status: scannen… richt de QR naar de camera.");
+        if (page) page.dataset.cameraActive = "true";
+        setStatus("Klaar om te scannen", "active");
+        currentVideoTrack?.addEventListener("ended", () => {
+            if (attempt === lifecycleId) {
+                if (page) page.dataset.cameraActive = "false";
+                setStatus("Camera opnieuw verbinden…", "starting");
+                scheduleRestart();
+            }
+        }, { once: true });
     } catch (error) {
+        if (attempt !== lifecycleId) {
+            finishInterruptedStart();
+            return;
+        }
+        isStarting = false;
         console.error("Camera start error:", error?.name, error?.message);
 
         setStatus(
@@ -228,15 +346,11 @@ async function start() {
                 ? "Camera is bezet door een andere app of tab. Sluit die en probeer opnieuw."
                 : error?.name === "NotAllowedError"
                     ? "Toegang geweigerd. Controleer de camera-toestemming in de browser."
-                    : "Kon camera niet starten. Gebruik HTTPS en geef camera-toestemming."
+                    : "Kon camera niet starten. Controleer de cameratoegang en probeer opnieuw.",
+            "error"
         );
-
-        if (startBtn) {
-            startBtn.disabled = false;
-        }
-
-        if (stopBtn) {
-            stopBtn.disabled = true;
+        if (!["NotAllowedError", "SecurityError", "NotFoundError"].includes(error?.name)) {
+            scheduleRestart();
         }
     }
 }
@@ -250,7 +364,7 @@ async function handleScanResult(rawValue) {
 
     submitting = true;
     qrField.value = value;
-    setStatus("Status: ticket verwerken...");
+    setStatus("Ticket controleren…", "processing");
 
     try {
         const response = await fetch(form.action, {
@@ -288,7 +402,9 @@ async function handleScanResult(rawValue) {
         window.clearTimeout(resumeTimer);
         resumeTimer = window.setTimeout(() => {
             submitting = false;
-            setStatus("Status: scannen… richt de QR naar de camera.");
+            if (page?.dataset.cameraActive === "true") {
+                setStatus("Klaar om te scannen", "active");
+            }
         }, feedbackMs);
     }
 }
@@ -310,20 +426,26 @@ function showFeedback(scan) {
         feedbackTitle.textContent = title;
     }
 
+    if (feedbackSymbol) {
+        feedbackSymbol.textContent = status === "success" ? "✓" : "!";
+    }
+
+    setStatus(title, status);
+
     if (feedbackMessage) {
         feedbackMessage.textContent = scan?.message || "Scan verwerkt.";
     }
 
     if (feedbackName) {
-        feedbackName.textContent = `Naam: ${scan?.orderline?.name || "-"}`;
+        feedbackName.textContent = scan?.orderline?.name ? `Naam: ${scan.orderline.name}` : "";
     }
 
     if (feedbackTicket) {
-        feedbackTicket.textContent = `Ticket: ${scan?.orderline?.ticket?.name || "-"}`;
+        feedbackTicket.textContent = scan?.orderline?.ticket?.name ? `Ticket: ${scan.orderline.ticket.name}` : "";
     }
 
     if (feedbackOrder) {
-        feedbackOrder.textContent = `Order: ${scan?.order_ref || scan?.orderline?.unique_qr_id || "-"}`;
+        feedbackOrder.textContent = scan?.order_ref ? `Order: ${scan.order_ref}` : "";
     }
 
     playFeedback(status);
@@ -337,7 +459,6 @@ function showFeedback(scan) {
 function playFeedback(status) {
     const success = status === "success";
     const pattern = success ? [40, 30, 40] : [80, 50, 80];
-    const soundFile = success ? "/sounds/success.mp3" : "/sounds/error.mp3";
 
     try {
         if ("vibrate" in navigator) {
@@ -347,21 +468,36 @@ function playFeedback(status) {
         // Ignore unsupported haptics.
     }
 
-    try {
-        const audio = new Audio(soundFile);
-        audio.volume = 0.8;
-        audio.play().catch(() => {});
-    } catch {
-        // Ignore blocked autoplay/audio errors.
-    }
+    void playSound(status);
 }
 
-startBtn?.addEventListener("click", () => void start());
-stopBtn?.addEventListener("click", stop);
+retryBtn?.addEventListener("click", () => void start());
 torchBtn?.addEventListener("click", () => void applyTorch(!torchOn));
-select?.addEventListener("change", () => void start());
+soundBtn?.addEventListener("click", () => {
+    if (audioContext?.state === "running" && !soundMuted) {
+        soundMuted = true;
+        updateSoundButton();
+        return;
+    }
+
+    soundMuted = false;
+    void enableSound();
+});
+document.addEventListener("pointerdown", event => {
+    if (!soundBtn?.contains(event.target)) void enableSound();
+}, { once: true });
+document.addEventListener("keydown", event => {
+    if (!soundBtn?.contains(event.target)) void enableSound();
+}, { once: true });
+
+void loadSounds().then(() => {
+    void audioContext?.resume().then(updateSoundButton).catch(() => {});
+}).catch(error => console.warn("Scangeluiden konden niet vooraf geladen worden:", error));
 
 window.addEventListener("pagehide", stop);
+window.addEventListener("pageshow", event => {
+    if (event.persisted) void start();
+});
 
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
@@ -369,23 +505,11 @@ document.addEventListener("visibilitychange", () => {
         return;
     }
 
-    resumeTimer = window.setTimeout(() => void start(), 150);
+    void start();
 });
 
-(async () => {
-    try {
-        await listCameras();
-        await start();
-    } catch (error) {
-        console.error(error);
-        setStatus("Kon camera niet starten. Geef camera-toestemming en gebruik HTTPS.");
+navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+    if (page?.dataset.cameraActive !== "true" && !isStarting) void start();
+});
 
-        if (startBtn) {
-            startBtn.disabled = false;
-        }
-
-        if (stopBtn) {
-            stopBtn.disabled = true;
-        }
-    }
-})();
+void start();

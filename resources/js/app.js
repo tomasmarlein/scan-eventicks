@@ -53,6 +53,14 @@ function bootTooltips() {
 }
 
 async function bootOptionalModules() {
+    if (document.getElementById('organisationSearch')) {
+        await import('./shared/organisation-filter');
+    }
+
+    if (document.querySelector('.search-panel[data-search-url]')) {
+        await import('./shared/manual-search');
+    }
+
     if (document.querySelector('.ckeditor')) {
         await import('./shared/ckeditor');
     }

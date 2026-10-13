@@ -8,7 +8,7 @@
         <meta name="keywords" content="Eventicks">
         <meta name="author" content="Eventicks">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <meta name="theme-color" content="#EF7900">
+        <meta name="theme-color" content="#1A3D8E">
 
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,20 +22,16 @@
 
         <script src="https://kit.fontawesome.com/4baa8ea5d9.js" crossorigin="anonymous" defer></script>
 
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
-
         @notifyCss
 
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @vite(['resources/js/app.js'])
 
         @yield('css_after')
 
         @laravelPWA
     </head>
-    <body>
-        @unless (request()->routeIs('scan.result'))
+    <body class="scanner-app{{ request()->routeIs('scan.camera') ? ' scanner-app--camera' : '' }}">
+        @unless (request()->routeIs('scan.result', 'scan.camera'))
             @include('shared.navbar')
         @endunless
 

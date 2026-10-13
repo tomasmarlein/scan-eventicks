@@ -67,14 +67,18 @@ class Orderline extends Model
         $exactColumns = self::existingColumns(config('scanner.orderline_qr_columns', ['uuid']));
         $textColumns = self::existingColumns(config('scanner.orderline_search_columns', []));
         $like = '%'.self::escapeLike($term).'%';
+        $qrLike = str_starts_with(strtolower($term), 'or_')
+            ? self::escapeLike($term).'%'
+            : $like;
 
         if ($exactColumns === [] && $textColumns === []) {
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where(function (Builder $subQuery) use ($term, $like, $exactColumns, $textColumns) {
+        return $query->where(function (Builder $subQuery) use ($term, $like, $qrLike, $exactColumns, $textColumns) {
             foreach ($exactColumns as $column) {
-                $subQuery->orWhere($column, $term);
+                $subQuery->orWhere($column, $term)
+                    ->orWhere($column, 'like', $qrLike);
             }
 
             foreach ($textColumns as $column) {
