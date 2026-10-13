@@ -16,7 +16,7 @@
                 </a>
                 <div class="scanner-topbar__title">
                     <span>{{ $event->name }}</span>
-                    <h1>Tickets scannen</h1>
+                    <h3>Tickets scannen</h3>
                 </div>
                 <span class="scanner-live"><span class="scanner-live__dot"></span> Live</span>
             </header>
@@ -35,6 +35,9 @@
                     <a class="scanner-manual" href="{{ route('scan.manuel', [$organisation->slug, $event->slug]) }}">
                         <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Ticket opzoeken
                     </a>
+                    <button id="soundBtn" type="button" class="scanner-sound" aria-label="Geluid inschakelen" aria-pressed="false" title="Geluid inschakelen">
+                        <i class="fa-solid fa-volume-high" aria-hidden="true"></i>
+                    </button>
                     <button id="torchBtn" type="button" class="scanner-torch" disabled aria-label="Zaklamp inschakelen" aria-pressed="false">
                         <i class="fa-solid fa-bolt" aria-hidden="true"></i> Zaklamp
                     </button>

@@ -5,7 +5,7 @@
         $soldTickets = (int) ($event->sold_tickets ?? 0);
         $scannedTickets = (int) ($event->scanned_tickets ?? 0);
         $toScan = (int) ($event->to_scan_tickets ?? max(0, $soldTickets - $scannedTickets));
-        $scanPercent = $soldTickets > 0 ? min(100, round($scannedTickets / $soldTickets * 100)) : 0;
+        $scanPercent = $soldTickets > 0 ? min(100, round($scannedTickets / $soldTickets * 100, 1)) : 0;
     @endphp
 
     @include('web.partials.page-header', [

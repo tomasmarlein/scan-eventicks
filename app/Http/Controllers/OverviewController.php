@@ -36,19 +36,20 @@ class OverviewController extends Controller
 
         $ticketIds = $event->tickets->pluck('id')->map(fn ($id) => (int) $id)->values();
 
-        $scannedByTicket = $ticketIds->isEmpty()
+        $countsByTicket = $ticketIds->isEmpty()
             ? collect()
             : Orderline::query()
                 ->forEvent((int) $event->id)
                 ->whereIn('ticket_id', $ticketIds)
-                ->where('scanned', true)
-                ->selectRaw('ticket_id, COUNT(*) as aggregate')
+                ->selectRaw('ticket_id, COUNT(*) as total, SUM(CASE WHEN scanned = 1 THEN 1 ELSE 0 END) as scanned_total')
                 ->groupBy('ticket_id')
-                ->pluck('aggregate', 'ticket_id');
+                ->get()
+                ->keyBy('ticket_id');
 
-        $event->tickets->each(function (Ticket $ticket) use ($scannedByTicket) {
-            $ticket->setAttribute('sold_tickets', (int) ($ticket->verkochte_tickets ?? 0));
-            $ticket->setAttribute('scanned_tickets', (int) ($scannedByTicket[$ticket->id] ?? 0));
+        $event->tickets->each(function (Ticket $ticket) use ($countsByTicket) {
+            $counts = $countsByTicket->get($ticket->id);
+            $ticket->setAttribute('sold_tickets', (int) ($counts?->total ?? 0));
+            $ticket->setAttribute('scanned_tickets', (int) ($counts?->scanned_total ?? 0));
         });
 
         $soldTickets = (int) $event->tickets->sum('sold_tickets');

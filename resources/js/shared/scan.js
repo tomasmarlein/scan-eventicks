@@ -2,6 +2,7 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const video    = document.getElementById("preview");
 const torchBtn = document.getElementById("torchBtn");
+const soundBtn = document.getElementById("soundBtn");
 const statusEl = document.getElementById("status");
 const retryBtn = document.getElementById("retryBtn");
 const qrField  = document.getElementById("qrField");
@@ -18,6 +19,8 @@ const feedbackSymbol = document.getElementById("scanFeedbackSymbol");
 
 const feedbackMs = Number.parseInt(page?.dataset?.feedbackMs || "1400", 10);
 const recentScanTtlMs = Math.max(feedbackMs + 1200, 3500);
+const soundFiles = { success: "/sounds/success.mp3", error: "/sounds/error.mp3" };
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
 let reader = null;
 let controls = null;
@@ -31,10 +34,104 @@ let restartTimer = null;
 let lifecycleId = 0;
 let isStarting = false;
 let restartWhenReady = false;
+let audioContext = null;
+let soundLoadPromise = null;
+let soundMuted = false;
 const recentScans = new Map();
 
 if (!video || !form || !qrField) {
     throw new Error("Scanner markup ontbreekt op deze pagina.");
+}
+
+function getAudioContext() {
+    if (!AudioContextClass) return null;
+
+    if (!audioContext) {
+        try {
+            audioContext = new AudioContextClass();
+            audioContext.addEventListener("statechange", updateSoundButton);
+        } catch {
+            return null;
+        }
+    }
+
+    return audioContext;
+}
+
+function updateSoundButton() {
+    if (!soundBtn) return;
+
+    const active = !soundMuted && audioContext?.state === "running";
+    const label = active ? "Geluid uitschakelen" : "Geluid inschakelen";
+    soundBtn.classList.toggle("is-active", active);
+    soundBtn.setAttribute("aria-pressed", String(active));
+    soundBtn.setAttribute("aria-label", label);
+    soundBtn.title = label;
+}
+
+function loadSounds() {
+    const context = getAudioContext();
+    if (!context) return Promise.resolve(null);
+
+    if (!soundLoadPromise) {
+        soundLoadPromise = Promise.all(Object.entries(soundFiles).map(async ([status, url]) => {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Geluid ${status} kon niet geladen worden.`);
+            return [status, await context.decodeAudioData(await response.arrayBuffer())];
+        })).then(entries => Object.fromEntries(entries)).catch(error => {
+            soundLoadPromise = null;
+            throw error;
+        });
+    }
+
+    return soundLoadPromise;
+}
+
+async function enableSound() {
+    if (soundMuted) return;
+
+    const context = getAudioContext();
+    if (!context) return;
+
+    try {
+        await context.resume();
+        await loadSounds();
+    } catch (error) {
+        console.warn("Scangeluid kon niet worden ingeschakeld:", error);
+    }
+
+    updateSoundButton();
+}
+
+async function playSound(status) {
+    if (soundMuted) return;
+
+    const key = status === "success" ? "success" : "error";
+    const context = getAudioContext();
+
+    if (context?.state === "running") {
+        try {
+            const buffers = await loadSounds();
+            const source = context.createBufferSource();
+            const volume = context.createGain();
+            source.buffer = buffers[key];
+            volume.gain.value = 0.8;
+            source.connect(volume);
+            volume.connect(context.destination);
+            source.start();
+            return;
+        } catch (error) {
+            console.warn("Scangeluid kon niet worden afgespeeld:", error);
+        }
+    }
+
+    try {
+        const audio = new Audio(soundFiles[key]);
+        audio.volume = 0.8;
+        await audio.play();
+    } catch {
+        updateSoundButton();
+    }
 }
 
 function setStatus(message, state) {
@@ -362,7 +459,6 @@ function showFeedback(scan) {
 function playFeedback(status) {
     const success = status === "success";
     const pattern = success ? [40, 30, 40] : [80, 50, 80];
-    const soundFile = success ? "/sounds/success.mp3" : "/sounds/error.mp3";
 
     try {
         if ("vibrate" in navigator) {
@@ -372,17 +468,31 @@ function playFeedback(status) {
         // Ignore unsupported haptics.
     }
 
-    try {
-        const audio = new Audio(soundFile);
-        audio.volume = 0.8;
-        audio.play().catch(() => {});
-    } catch {
-        // Ignore blocked autoplay/audio errors.
-    }
+    void playSound(status);
 }
 
 retryBtn?.addEventListener("click", () => void start());
 torchBtn?.addEventListener("click", () => void applyTorch(!torchOn));
+soundBtn?.addEventListener("click", () => {
+    if (audioContext?.state === "running" && !soundMuted) {
+        soundMuted = true;
+        updateSoundButton();
+        return;
+    }
+
+    soundMuted = false;
+    void enableSound();
+});
+document.addEventListener("pointerdown", event => {
+    if (!soundBtn?.contains(event.target)) void enableSound();
+}, { once: true });
+document.addEventListener("keydown", event => {
+    if (!soundBtn?.contains(event.target)) void enableSound();
+}, { once: true });
+
+void loadSounds().then(() => {
+    void audioContext?.resume().then(updateSoundButton).catch(() => {});
+}).catch(error => console.warn("Scangeluiden konden niet vooraf geladen worden:", error));
 
 window.addEventListener("pagehide", stop);
 window.addEventListener("pageshow", event => {

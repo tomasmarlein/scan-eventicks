@@ -109,6 +109,7 @@
     .scan-result-page--error &__icon { background: #fee7e7; color: #b73b37; }
     h1 { margin: .4rem 0 0; color: #1c2942; font-size: 1.65rem; font-weight: 800; letter-spacing: -.03em; }
     &__message { margin: .55rem 0 0; color: #63738e; font-size: .9rem; }
+    .scan-result-page--warning &__message, .scan-result-page--error &__message { color: #a51f30; font-weight: 700; }
     &__details { display: grid; gap: .8rem; margin: 1.5rem 0 0; padding: 1.2rem 0 0; border-top: 1px solid #e9edf3; text-align: left; div { display: flex; justify-content: space-between; gap: 1rem; } dt { color: #71809a; font-size: .78rem; font-weight: 600; } dd { max-width: 65%; margin: 0; color: #1c2942; font-size: .82rem; font-weight: 750; overflow-wrap: anywhere; text-align: right; } }
 }
 
