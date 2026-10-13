@@ -30,8 +30,8 @@
 
         @laravelPWA
     </head>
-    <body class="scanner-app">
-        @unless (request()->routeIs('scan.result'))
+    <body class="scanner-app{{ request()->routeIs('scan.camera') ? ' scanner-app--camera' : '' }}">
+        @unless (request()->routeIs('scan.result', 'scan.camera'))
             @include('shared.navbar')
         @endunless
 
