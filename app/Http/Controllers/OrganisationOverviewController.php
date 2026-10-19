@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ResolvesScannerContext;
 use App\Models\Orderline;
-use App\Models\Ticket;
 
 class OrganisationOverviewController extends Controller
 {
@@ -21,26 +20,19 @@ class OrganisationOverviewController extends Controller
 
         $eventIds = $events->pluck('id')->map(fn ($id) => (int) $id)->values();
 
-        $soldByEvent = $eventIds->isEmpty()
-            ? collect()
-            : Ticket::query()
-                ->whereIn('event_id', $eventIds)
-                ->selectRaw('event_id, COALESCE(SUM(verkochte_tickets), 0) as aggregate')
-                ->groupBy('event_id')
-                ->pluck('aggregate', 'event_id');
-
-        $scannedByEvent = $eventIds->isEmpty()
+        $countsByEvent = $eventIds->isEmpty()
             ? collect()
             : Orderline::query()
                 ->whereIn('event_id', $eventIds)
-                ->where('scanned', true)
-                ->selectRaw('event_id, COUNT(*) as aggregate')
+                ->selectRaw('event_id, COUNT(*) as total, SUM(CASE WHEN scanned = 1 THEN 1 ELSE 0 END) as scanned_total')
                 ->groupBy('event_id')
-                ->pluck('aggregate', 'event_id');
+                ->get()
+                ->keyBy('event_id');
 
-        $events->each(function ($event) use ($soldByEvent, $scannedByEvent) {
-            $sold = (int) ($soldByEvent[$event->id] ?? 0);
-            $scanned = (int) ($scannedByEvent[$event->id] ?? 0);
+        $events->each(function ($event) use ($countsByEvent) {
+            $counts = $countsByEvent->get($event->id);
+            $sold = (int) ($counts?->total ?? 0);
+            $scanned = (int) ($counts?->scanned_total ?? 0);
 
             $event->setAttribute('sold_tickets', $sold);
             $event->setAttribute('scanned_tickets', $scanned);

@@ -1,46 +1,34 @@
 @forelse($orderlines as $orderline)
-    <div class="col-12">
-        <div class="card border-1 bg-white p-3 border-radius-lg">
-            <div class="row align-items-center g-3">
-                <div class="col-8">
-                    <h3 class="h6 mb-2">{{ $orderline['unique_qr_id'] ?? 'Onbekende QR' }}</h3>
-                    <div class="mb-3">
-                        <span class="text-muted">{{ $orderline['name'] ?? 'Naam onbekend' }}</span>
-                    </div>
-                    <div>
-                        @if(!empty($orderline['blocked']))
-                            <span class="badge bg-danger-subtle text-danger">Geblokkeerd</span>
-                        @elseif(!empty($orderline['scanned']))
-                            <span class="badge bg-dark-subtle text-dark">Gescand</span>
-                        @else
-                            <span class="badge bg-primary-subtle text-primary">Geldig</span>
-                        @endif
-                    </div>
-                </div>
-                <div class="col-4 text-center">
-                    @if(!empty($orderline['blocked']))
-                        <i class="fa-light fa-circle-xmark text-danger" style="font-size: 1.5rem;"></i>
-                    @elseif(!empty($orderline['scanned']))
-                        <form method="POST" action="{{ $orderline['url_checkout'] ?? '#' }}" class="d-inline">
-                            @csrf
-                            <button class="btn btn-white" type="submit" style="padding: .5rem 1rem;">Check-uit</button>
-                        </form>
-                    @elseif(!empty($orderline['url_checkin']))
-                        <form method="POST" action="{{ $orderline['url_checkin'] }}" class="d-inline">
-                            @csrf
-                            <button class="btn btn-primary" type="submit" style="padding: .5rem 1rem;">Check-in</button>
-                        </form>
-                    @else
-                        <span class="text-muted small">Geen actie</span>
-                    @endif
-                </div>
-            </div>
+    @php
+        $ticketStatus = !empty($orderline['blocked']) ? 'blocked' : (!empty($orderline['scanned']) ? 'scanned' : 'valid');
+    @endphp
+    <article class="ticket-row" aria-label="Ticket van {{ $orderline['name'] ?? 'onbekende naam' }}">
+        <span class="ticket-row__icon ticket-row__icon--{{ $ticketStatus }}"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+        <div class="ticket-row__info">
+            <strong>{{ $orderline['name'] ?? 'Naam onbekend' }}</strong>
+            <small title="{{ $orderline['unique_qr_id'] ?? 'Onbekende QR' }}">{{ $orderline['unique_qr_id'] ?? 'Onbekende QR' }}</small>
         </div>
-    </div>
+        <span class="status-pill status-pill--{{ $ticketStatus }}">
+            {{ $ticketStatus === 'blocked' ? 'Geblokkeerd' : ($ticketStatus === 'scanned' ? 'Ingecheckt' : 'Geldig') }}
+        </span>
+        <div class="ticket-row__action">
+            @if($ticketStatus === 'scanned' && !empty($orderline['url_checkout']))
+                <form method="POST" action="{{ $orderline['url_checkout'] }}">
+                    @csrf
+                    <button class="app-button app-button--secondary" type="submit">Check-uit</button>
+                </form>
+            @elseif($ticketStatus === 'valid' && !empty($orderline['url_checkin']))
+                <form method="POST" action="{{ $orderline['url_checkin'] }}">
+                    @csrf
+                    <button class="app-button app-button--primary" type="submit">Check-in</button>
+                </form>
+            @endif
+        </div>
+    </article>
 @empty
-    <div class="col-12">
-        <div class="card border-1 bg-white p-4 border-radius-lg text-center text-muted">
-            Geen tickets gevonden.
-        </div>
+    <div class="surface-card empty-state">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <h2>Geen tickets gevonden</h2>
+        <p>Probeer een andere naam, QR-code of referentie.</p>
     </div>
 @endforelse

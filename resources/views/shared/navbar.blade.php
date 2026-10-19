@@ -1,64 +1,39 @@
-<nav id="navbar" class="navbar navbar-light">
-    <div class="container">
-        <a class="navbar-brand" href="/">
-            {{ config('app.name') }}
+<nav id="navbar" class="navbar navbar-light" aria-label="Hoofdnavigatie">
+    <div class="container app-shell">
+        <a class="navbar-brand" href="{{ route('dashboard') }}" aria-label="Eventicks scanner, naar organisaties">
+            <span class="navbar-brand__mark"><i class="fa-solid fa-qrcode" aria-hidden="true"></i></span>
+            <span><strong>Eventicks</strong><small>SCANNER</small></span>
         </a>
-        <button id="navbar-toggler" class="navbar-toggler border-0" type="button"
-                data-bs-toggle="offcanvas" data-bs-target="#navigation" aria-controls="navigation"
-                aria-expanded="false"
-                aria-label="Navigatie">
-            <i class="fa-light fa-bars"></i>
-        </button>
+        <div class="navbar-actions">
+            <a class="navbar-actions__home" href="{{ route('dashboard') }}">Organisaties</a>
+            <button id="navbar-toggler" class="navbar-toggler" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#navigation" aria-controls="navigation"
+                    aria-expanded="false" aria-label="Open menu">
+                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+            </button>
+        </div>
     </div>
 </nav>
 
-
-<div class="offcanvas offcanvas-end p-4 bg-white" tabindex="-1" id="navigation" aria-labelledby="navigationLabel">
+<div class="offcanvas offcanvas-end app-menu" tabindex="-1" id="navigation" aria-labelledby="navigationLabel">
     <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="navigationLabel">Menu</h5>
-        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <div>
+            <small class="app-menu__eyebrow">EVENTICKS</small>
+            <h2 class="offcanvas-title" id="navigationLabel">Menu</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Sluit menu"></button>
     </div>
     <div class="offcanvas-body">
-
-        <div class="mb-4">
-            <small class="text-muted mb-2">Ingelogd als</small>
-            <div class="card p-4 border-radius-md border-0">
-                <div class="row align-items-center">
-                    <div class="col-4">
-                        <div class="round-circle">
-                            <i class="fa-light fa-user"></i>
-                        </div>
-                    </div>
-                    <div class="col-8">
-                        <div class="">{{ auth()->user()->name }}</div>
-                    </div>
-                </div>
-            </div>
+        <a href="{{ route('dashboard') }}" class="app-menu__link">
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Organisaties
+        </a>
+        <div class="app-menu__account">
+            <span class="app-menu__avatar"><i class="fa-solid fa-user" aria-hidden="true"></i></span>
+            <div><small>Ingelogd als</small><strong>{{ auth()->user()->name }}</strong></div>
         </div>
-
-        <div class="mb-4">
-            <div class="card p-4 border-radius-md bg-transparent border-1">
-                <div class="row align-items-center">
-                    <div class="col-12">
-                        <span class="text-muted">
-                            Ticketscanner systeem <br>
-                            Versie 1.0
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <ul class="nav gap-2">
-            <li class="card p-3 bg-transparent border-radius-md border-1 w-100">
-                <form method="POST" action="{{ route('logout') }}" class="m-0">
-                    @csrf
-                    <button type="submit" class="btn btn-link text-danger p-0 text-decoration-none">
-                        <i class="fa-light fa-arrow-right-from-bracket me-3"></i>
-                        uitloggen
-                    </button>
-                </form>
-            </li>
-        </ul>
+        <form method="POST" action="{{ route('logout') }}" class="app-menu__logout">
+            @csrf
+            <button type="submit"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Uitloggen</button>
+        </form>
     </div>
 </div>

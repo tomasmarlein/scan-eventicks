@@ -1,63 +1,44 @@
 @extends('template.template')
 
 @section('main')
-    <header class="section bg-primary text-white">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-8">
-                    <div class="mb-5">
-                        <a href="{{ route('event.overview', [$organisation->slug, $event->slug]) }}" class="text-white text-decoration-none">
-                            <i class="fa-solid fa-arrow-left-long me-2 text-white"></i> Terug</a>
-                    </div>
-                    <h5 class="text-white">Scanner instellen</h5>
-                    <div class="ck-text">
-                        Selecteer welke tickettypes je met dit toestel wil scannen.
-                    </div>
+    @include('web.partials.page-header', [
+        'backUrl' => route('event.overview', [$organisation->slug, $event->slug]),
+        'backLabel' => 'Evenement',
+        'eyebrow' => $event->name,
+        'title' => 'Tickettypes kiezen',
+        'description' => 'Bepaal welke tickets deze scanner accepteert.',
+    ])
+
+    <main class="app-main">
+        <div class="container app-shell app-shell--narrow">
+            <form method="POST" action="{{ route('scan.camera', [$organisation->slug, $event->slug]) }}" class="surface-card ticket-setup">
+                @csrf
+                <div class="ticket-setup__heading">
+                    <span class="section-kicker">SCANNER INSTELLEN</span>
+                    <h2>Te scannen tickets</h2>
+                    <p>Alle tickettypes zijn standaard geselecteerd.</p>
                 </div>
-            </div>
+
+                @if ($errors->has('tickets'))
+                    <div class="alert alert-danger" role="alert">{{ $errors->first('tickets') }}</div>
+                @endif
+
+                <div class="ticket-options">
+                    @foreach($event->tickets as $ticket)
+                        <label class="ticket-option" for="ticket-{{ $ticket->id }}">
+                            <span class="ticket-option__icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+                            <span class="ticket-option__name">{{ $ticket->name }}</span>
+                            <input class="form-check-input" type="checkbox" id="ticket-{{ $ticket->id }}" value="{{ $ticket->id }}" name="tickets[]" checked>
+                        </label>
+                    @endforeach
+                </div>
+
+                <div class="ticket-setup__footer">
+                    <button type="submit" class="app-button app-button--primary" @if($event->tickets->isEmpty()) disabled @endif>
+                        <i class="fa-solid fa-camera" aria-hidden="true"></i> Scanner openen
+                    </button>
+                </div>
+            </form>
         </div>
-    </header>
-
-    <form method="post" action="{{ route('scan.camera', [$organisation->slug, $event->slug]) }}" class="w-100">
-        @csrf
-        <section class="section">
-            <div class="container">
-                <div class="row g-4">
-                    <div class="col-12">
-                        @if ($errors->has('tickets'))
-                            <div class="alert alert-danger">{{ $errors->first('tickets') }}</div>
-                        @endif
-
-                        <div class="card bg-white p-4 border-1 border-radius-lg">
-                            <div class="row mb-3">
-                                <div class="col-12">
-                                    <h5>Type tickets</h5>
-                                </div>
-                            </div>
-                            <div class="row g-4">
-                                @foreach($event->tickets as $ticket)
-                                    <div class="col-12">
-                                        <div class="card bg-light border-0 p-3 border-radius-md">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="ticket-{{ $ticket->id }}" value="{{ $ticket->id }}" name="tickets[]" checked>
-                                                <label class="form-check-label" for="ticket-{{ $ticket->id }}">{{ $ticket->name }}</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-12">
-                        <div class="btn-wrapper">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fa-light fa-qrcode-read me-3"></i> Start scanner
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </form>
+    </main>
 @endsection
