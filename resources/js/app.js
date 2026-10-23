@@ -53,8 +53,8 @@ function bootTooltips() {
 }
 
 async function bootOptionalModules() {
-    if (document.getElementById('organisationSearch')) {
-        await import('./shared/organisation-filter');
+    if (document.querySelector('[data-list-search]')) {
+        await import('./shared/ajax-list-search');
     }
 
     if (document.querySelector('.search-panel[data-search-url]')) {

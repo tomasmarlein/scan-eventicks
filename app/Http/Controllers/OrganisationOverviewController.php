@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ResolvesScannerContext;
+use App\Models\Organisation;
 use App\Models\Orderline;
+use Illuminate\Http\Request;
 
 class OrganisationOverviewController extends Controller
 {
@@ -12,9 +14,34 @@ class OrganisationOverviewController extends Controller
     public function index(string $slug)
     {
         $organisation = $this->resolveOrganisation($slug);
+        $events = $this->eventsWithCounts($organisation);
 
+        return view('web.overview', [
+            'organisation' => $organisation,
+            'events' => $events,
+        ]);
+    }
+
+    public function search(string $slug, Request $request)
+    {
+        $organisation = $this->resolveOrganisation($slug);
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $events = $this->eventsWithCounts($organisation, trim($validated['q'] ?? ''));
+
+        return response()->json([
+            'html' => view('web.partials.event-list', compact('organisation', 'events'))->render(),
+            'count' => $events->count(),
+        ]);
+    }
+
+    private function eventsWithCounts(Organisation $organisation, string $query = '')
+    {
         $events = $organisation->events()
             ->select(['id', 'organisation_id', 'name', 'slug', 'address', 'postcode', 'plaats', 'start'])
+            ->when($query !== '', fn ($builder) => $builder->where('name', 'like', '%'.addcslashes($query, '%_\\').'%'))
             ->orderByDesc('start')
             ->get();
 
@@ -39,9 +66,6 @@ class OrganisationOverviewController extends Controller
             $event->setAttribute('scan_percentage', $sold > 0 ? round(($scanned / $sold) * 100, 1) : 0);
         });
 
-        return view('web.overview', [
-            'organisation' => $organisation,
-            'events' => $events,
-        ]);
+        return $events;
     }
 }

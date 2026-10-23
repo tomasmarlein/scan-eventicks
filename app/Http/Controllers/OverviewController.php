@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesScannerContext;
 use App\Models\Orderline;
 use App\Models\Organisation;
 use App\Models\Ticket;
+use Illuminate\Http\Request;
 
 class OverviewController extends Controller
 {
@@ -20,6 +21,26 @@ class OverviewController extends Controller
 
         return view('web.organisations', [
             'organisations' => $organisations,
+        ]);
+    }
+
+    public function search(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $query = trim($validated['q'] ?? '');
+        $organisations = Organisation::query()
+            ->select(['id', 'name', 'slug'])
+            ->forUser($request->user())
+            ->when($query !== '', fn ($builder) => $builder->where('name', 'like', '%'.addcslashes($query, '%_\\').'%'))
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'html' => view('web.partials.organisation-list', compact('organisations'))->render(),
+            'count' => $organisations->count(),
         ]);
     }
 

@@ -12,8 +12,10 @@ Route::get('/', function () {
 
 Route::middleware('auth')->prefix('scan')->group(function () {
     Route::get('/overzicht', [OverviewController::class, 'index'])->name('dashboard');
+    Route::get('/organisations/search', [OverviewController::class, 'search'])->middleware('throttle:scan-search')->name('organisations.search');
 
     Route::get('/organisation/{slug}', [OrganisationOverviewController::class, 'index'])->name('organisation.overview');
+    Route::get('/organisation/{slug}/events/search', [OrganisationOverviewController::class, 'search'])->middleware('throttle:scan-search')->name('organisation.events.search');
     Route::get('/organisation/{org_slug}/event/{slug}', [OverviewController::class, 'event'])->name('event.overview');
 
     Route::get('/organisation/{org_slug}/event/{slug}/manueel', [ManuelController::class, 'index'])->name('scan.manuel');

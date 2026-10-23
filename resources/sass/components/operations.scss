@@ -46,6 +46,8 @@
 
 .empty-state { display: grid; justify-items: center; padding: 3rem 1.5rem; text-align: center; i { margin-bottom: .9rem; color: #9eb2d7; font-size: 1.5rem; } h2 { margin: 0; color: #1c2942; font-size: 1.1rem; font-weight: 800; } p { margin: .4rem 0 0; color: #6d7c94; } }
 .organisation-filter { padding: 1rem; }
+.organisation-filter__feedback { margin: .65rem 0 0; color: #71809a; font-size: .74rem; }
+.organisation-filter__feedback--error { color: #b42318; }
 
 .event-overview-card {
     display: block; padding: 1.5rem; border: 1px solid #e1e7f0; border-radius: 1.2rem;
