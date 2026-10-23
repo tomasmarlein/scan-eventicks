@@ -1,8 +1,7 @@
 <nav id="navbar" class="navbar navbar-light" aria-label="Hoofdnavigatie">
     <div class="container app-shell">
         <a class="navbar-brand" href="{{ route('dashboard') }}" aria-label="Eventicks scanner, naar organisaties">
-            <span class="navbar-brand__mark"><i class="fa-solid fa-qrcode" aria-hidden="true"></i></span>
-            <span><strong>Eventicks</strong><small>SCANNER</small></span>
+            <img src="{{ asset('images/eventicks-logo.png') }}" alt="Eventicks" width="185" height="30">
         </a>
         <div class="navbar-actions">
             <a class="navbar-actions__home" href="{{ route('dashboard') }}">Organisaties</a>
